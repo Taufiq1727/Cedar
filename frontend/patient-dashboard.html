@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Patient Dashboard — MediKiosk</title>
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/dashboard.css">
+</head>
+<body>
+    <div class="dashboard-layout">
+        <!-- Header -->
+        <header class="dash-header">
+            <div class="dash-header-left">
+                <a href="/" class="dash-brand"><div class="icon">🏥</div> MediKiosk</a>
+                <nav class="dash-nav">
+                    <a href="patient-dashboard.html" class="active">Dashboard</a>
+                    <a href="intake.html">New Check-In</a>
+                </nav>
+            </div>
+            <div class="dash-header-right">
+                <div class="dash-user">
+                    <div>
+                        <div class="dash-user-name" id="user-name">Patient</div>
+                        <div class="dash-user-role">Patient</div>
+                    </div>
+                    <div class="dash-user-avatar" id="user-avatar">P</div>
+                </div>
+                <button class="btn btn-ghost btn-sm" onclick="logout()">Logout</button>
+            </div>
+        </header>
+
+        <!-- Content -->
+        <main class="dash-content">
+            <!-- Welcome -->
+            <div class="welcome-card">
+                <div>
+                    <h2 id="welcome-msg">Welcome back!</h2>
+                    <p>Start a new health check-in or review your previous consultations.</p>
+                    <a href="intake.html" class="btn btn-white btn-lg" style="margin-top:var(--space-2)">🩺 Start New Health Check-In</a>
+                </div>
+            </div>
+
+            <!-- Quick Stats -->
+            <div class="quick-stats" id="quick-stats">
+                <div class="quick-stat">
+                    <div class="label">Total Sessions</div>
+                    <div class="value" id="stat-sessions">—</div>
+                </div>
+                <div class="quick-stat">
+                    <div class="label">Documents Uploaded</div>
+                    <div class="value" id="stat-documents">—</div>
+                </div>
+                <div class="quick-stat">
+                    <div class="label">Active Alerts</div>
+                    <div class="value" id="stat-alerts">—</div>
+                </div>
+            </div>
+
+            <!-- Main Grid -->
+            <div class="dash-grid">
+                <!-- Previous Sessions -->
+                <div class="dash-card">
+                    <div class="dash-card-header">
+                        <h3>📋 Previous Sessions</h3>
+                        <a href="intake.html" class="btn btn-primary btn-sm">+ New</a>
+                    </div>
+                    <div class="dash-card-body" id="sessions-list">
+                        <div class="empty-state">
+                            <div class="empty-state-icon">📋</div>
+                            <div class="empty-state-title">No sessions yet</div>
+                            <div class="empty-state-text">Start your first health check-in to begin collecting your clinical history.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Documents -->
+                <div class="dash-card">
+                    <div class="dash-card-header">
+                        <h3>📄 Uploaded Documents</h3>
+                    </div>
+                    <div class="dash-card-body" id="documents-list">
+                        <div class="empty-state">
+                            <div class="empty-state-icon">📄</div>
+                            <div class="empty-state-title">No documents</div>
+                            <div class="empty-state-text">Upload prescriptions, lab reports, or discharge summaries during your check-in.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script src="js/toast.js"></script>
+    <script src="js/utils.js"></script>
+    <script>
+        // Auth guard
+        if (!requireAuth('patient')) { /* redirected */ }
+
+        // Set user info
+        document.getElementById('user-name').textContent = api.getName();
+        document.getElementById('user-avatar').textContent = (api.getName() || 'P')[0].toUpperCase();
+        document.getElementById('welcome-msg').textContent = `Welcome back, ${api.getName()}!`;
+
+        function logout() {
+            api.clearAuth();
+            window.location.href = '/login.html';
+        }
+
+        // Load dashboard data
+        async function loadDashboard() {
+            try {
+                const [sessions, documents] = await Promise.all([
+                    api.getPatientSessions(),
+                    api.getPatientDocuments(),
+                ]);
+
+                // Stats
+                document.getElementById('stat-sessions').textContent = sessions.length;
+                document.getElementById('stat-documents').textContent = documents.length;
+                const alertCount = sessions.reduce((sum, s) => sum + (s.red_flag_count || 0), 0);
+                document.getElementById('stat-alerts').textContent = alertCount;
+
+                // Sessions list
+                const sessionsEl = document.getElementById('sessions-list');
+                if (sessions.length > 0) {
+                    sessionsEl.innerHTML = sessions.map(s => `
+                        <div class="session-item" onclick="viewSession('${s.id}')">
+                            <div class="session-info">
+                                <h4>${escapeHtml(s.chief_complaint || 'Health Check-In')}</h4>
+                                <p>${formatDate(s.created_at)} • ${s.pathway ? s.pathway.replace('_', ' ') : 'General'}</p>
+                            </div>
+                            <div class="session-meta">
+                                ${statusBadge(s.status)}
+                                ${s.has_red_flags ? '<span class="badge badge-danger" style="margin-top:4px">⚠️ Alerts</span>' : ''}
+                            </div>
+                        </div>
+                    `).join('');
+                }
+
+                // Documents list
+                const docsEl = document.getElementById('documents-list');
+                if (documents.length > 0) {
+                    docsEl.innerHTML = documents.map(d => `
+                        <div class="session-item">
+                            <div class="session-info">
+                                <h4>${escapeHtml(d.filename)}</h4>
+                                <p>${d.category.replace('_', ' ')} • ${formatDate(d.uploaded_at)}</p>
+                            </div>
+                            <div class="session-meta">
+                                <span class="badge badge-neutral">${d.file_type.toUpperCase()}</span>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+
+            } catch (err) {
+                toast.error('Failed to load dashboard: ' + err.message);
+            }
+        }
+
+        function viewSession(sessionId) {
+            // Could open a session detail modal or page
+            toast.info('Session details view coming soon');
+        }
+
+        loadDashboard();
+    </script>
+</body>
+</html>

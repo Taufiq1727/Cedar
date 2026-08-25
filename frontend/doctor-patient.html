@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Patient Review — MediKiosk</title>
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/dashboard.css">
+    <link rel="stylesheet" href="css/doctor.css">
+</head>
+<body>
+    <div class="dashboard-layout">
+        <!-- Header -->
+        <header class="dash-header">
+            <div class="dash-header-left">
+                <a href="/" class="dash-brand"><div class="icon">🏥</div> MediKiosk</a>
+                <nav class="dash-nav">
+                    <a href="doctor-dashboard.html">Patient Queue</a>
+                    <a href="#" class="active">Patient Review</a>
+                </nav>
+            </div>
+            <div class="dash-header-right">
+                <div class="dash-user">
+                    <div>
+                        <div class="dash-user-name" id="user-name">Doctor</div>
+                        <div class="dash-user-role">Physician</div>
+                    </div>
+                    <div class="dash-user-avatar" id="user-avatar">D</div>
+                </div>
+                <button class="btn btn-ghost btn-sm" onclick="api.clearAuth();window.location.href='/login.html'">Logout</button>
+            </div>
+        </header>
+
+        <!-- Content -->
+        <main class="dash-content-wide">
+            <!-- Patient Header -->
+            <div class="patient-detail-header" id="patient-header">
+                <div class="patient-info-card">
+                    <div class="patient-big-avatar" id="patient-avatar">?</div>
+                    <div class="patient-main-info">
+                        <h2 id="patient-name">Loading...</h2>
+                        <p id="patient-meta"></p>
+                    </div>
+                </div>
+                <div style="display:flex;gap:var(--space-3)">
+                    <a href="doctor-dashboard.html" class="btn btn-secondary btn-sm">← Back to Queue</a>
+                    <button class="btn btn-primary btn-sm" id="generate-summary-btn" onclick="generateSummary()">📋 Generate Summary</button>
+                </div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="tabs" id="detail-tabs">
+                <button class="tab active" data-tab="tab-overview">Overview</button>
+                <button class="tab" data-tab="tab-summary">AI Clinical Summary</button>
+                <button class="tab" data-tab="tab-history">Full History</button>
+                <button class="tab" data-tab="tab-documents">Documents</button>
+                <button class="tab" data-tab="tab-timeline">Timeline</button>
+                <button class="tab" data-tab="tab-alerts">Alerts</button>
+            </div>
+
+            <!-- Tab: Overview -->
+            <div class="tab-content active" id="tab-overview">
+                <div style="padding:var(--space-6) 0">
+                    <div class="quick-stats" id="overview-stats"></div>
+                    <div class="dash-grid" id="overview-grid">
+                        <div class="dash-card">
+                            <div class="dash-card-header"><h3>Chief Complaint</h3></div>
+                            <div class="dash-card-body" id="overview-complaint">—</div>
+                        </div>
+                        <div class="dash-card">
+                            <div class="dash-card-header"><h3>⚠️ Active Red Flags</h3></div>
+                            <div class="dash-card-body" id="overview-flags">None</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab: AI Summary -->
+            <div class="tab-content" id="tab-summary">
+                <div style="padding:var(--space-6) 0">
+                    <div class="summary-section" id="summary-section">
+                        <div class="empty-state">
+                            <div class="empty-state-icon">📋</div>
+                            <div class="empty-state-title">No summary generated yet</div>
+                            <div class="empty-state-text">Click "Generate Summary" to create an AI clinical summary.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab: Full History -->
+            <div class="tab-content" id="tab-history">
+                <div style="padding:var(--space-6) 0" id="history-content">
+                    <div class="empty-state">
+                        <div class="empty-state-title">Loading...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab: Documents -->
+            <div class="tab-content" id="tab-documents">
+                <div style="padding:var(--space-6) 0" id="documents-content">
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📄</div>
+                        <div class="empty-state-title">No documents uploaded</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab: Timeline -->
+            <div class="tab-content" id="tab-timeline">
+                <div style="padding:var(--space-6) 0" id="timeline-content">
+                    <div class="empty-state">
+                        <div class="empty-state-title">Loading timeline...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab: Alerts -->
+            <div class="tab-content" id="tab-alerts">
+                <div style="padding:var(--space-6) 0" id="alerts-content">
+                    <div class="empty-state">
+                        <div class="empty-state-icon">🔔</div>
+                        <div class="empty-state-title">No alerts</div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script src="js/toast.js"></script>
+    <script src="js/utils.js"></script>
+    <script>
+        if (!requireAuth('doctor')) { /* redirected */ }
+
+        document.getElementById('user-name').textContent = api.getName();
+        document.getElementById('user-avatar').textContent = (api.getName() || 'D')[0].toUpperCase();
+
+        const patientId = new URLSearchParams(window.location.search).get('id');
+        if (!patientId) { window.location.href = '/doctor-dashboard.html'; }
+
+        let patientData = null;
+
+        // Init tabs
+        initTabs('#detail-tabs');
+
+        async function loadPatient() {
+            try {
+                patientData = await api.getDoctorPatientDetail(patientId);
+                renderPatient();
+            } catch (err) {
+                toast.error('Failed to load patient: ' + err.message);
+            }
+        }
+
+        function renderPatient() {
+            const p = patientData.patient;
+            const sessions = patientData.sessions;
+            const docs = patientData.documents;
+            const timeline = patientData.timeline;
+
+            // Header
+            document.getElementById('patient-name').textContent = p.name;
+            document.getElementById('patient-avatar').textContent = (p.name || '?')[0].toUpperCase();
+            const metaParts = [];
+            if (p.age) metaParts.push(`${p.age} years`);
+            if (p.gender) metaParts.push(p.gender);
+            if (p.blood_group) metaParts.push(`Blood: ${p.blood_group}`);
+            if (p.phone) metaParts.push(`📞 ${p.phone}`);
+            document.getElementById('patient-meta').textContent = metaParts.join(' • ');
+
+            // Overview
+            const latestSession = sessions[0];
+            if (latestSession) {
+                document.getElementById('overview-complaint').innerHTML = `
+                    <div style="font-size:1.25rem;font-weight:700;margin-bottom:var(--space-2)">${escapeHtml(latestSession.chief_complaint || 'Not recorded')}</div>
+                    <p class="text-muted">Pathway: ${latestSession.pathway || 'General'} • Progress: ${latestSession.progress_pct}%</p>
+                    <div class="progress-bar" style="margin-top:var(--space-3)"><div class="progress-fill" style="width:${latestSession.progress_pct}%"></div></div>
+                `;
+
+                // Red flags overview
+                const allFlags = sessions.flatMap(s => s.red_flags || []);
+                if (allFlags.length > 0) {
+                    document.getElementById('overview-flags').innerHTML = allFlags.map(f => `
+                        <div class="alert ${f.severity === 'HIGH' ? 'alert-danger' : 'alert-warning'}" style="margin-bottom:var(--space-2)">
+                            <span class="alert-icon">${f.severity === 'HIGH' ? '🔴' : '🟡'}</span>
+                            <div><strong>${escapeHtml(f.title)}</strong><br>${escapeHtml(f.description)}</div>
+                        </div>
+                    `).join('');
+                }
+
+                // Overview stats
+                document.getElementById('overview-stats').innerHTML = `
+                    <div class="quick-stat"><div class="label">Sessions</div><div class="value">${sessions.length}</div></div>
+                    <div class="quick-stat"><div class="label">Documents</div><div class="value">${docs.length}</div></div>
+                    <div class="quick-stat"><div class="label">Red Flags</div><div class="value" style="color:${allFlags.length > 0 ? 'var(--danger)' : 'var(--gray-800)'}">${allFlags.length}</div></div>
+                    <div class="quick-stat"><div class="label">Status</div><div class="value text-sm">${latestSession.status}</div></div>
+                `;
+            }
+
+            // Summary tab
+            if (latestSession && latestSession.summary) {
+                renderSummary(latestSession.summary);
+            }
+
+            // History tab
+            renderHistory(sessions);
+
+            // Documents tab
+            renderDocuments(docs);
+
+            // Timeline tab
+            renderTimeline(timeline);
+
+            // Alerts tab
+            renderAlerts(sessions);
+        }
+
+        function renderSummary(summary) {
+            const section = document.getElementById('summary-section');
+            section.innerHTML = `
+                <h3>📋 AI Clinical Summary ${statusBadge(summary.status)}</h3>
+                <div class="alert alert-warning" style="margin-bottom:var(--space-4)">
+                    <span class="alert-icon">⚠️</span>
+                    AI-generated clinical intake summary. Requires clinician verification.
+                </div>
+                <div class="summary-content">${escapeHtml(summary.summary_text || JSON.stringify(summary.summary_json, null, 2))}</div>
+                ${summary.doctor_notes ? `<div style="margin-top:var(--space-3)"><strong>Doctor Notes:</strong> ${escapeHtml(summary.doctor_notes)}</div>` : ''}
+                <div class="doctor-notes-area">
+                    <label class="form-label">Doctor Notes / Edits</label>
+                    <textarea id="doctor-notes" placeholder="Add your notes, corrections, or observations...">${summary.doctor_notes || ''}</textarea>
+                </div>
+                <div class="summary-actions">
+                    <button class="btn btn-accent" onclick="approveSummary('${summary.id}', 'approved')">✓ Approve & Verify</button>
+                    <button class="btn btn-danger" onclick="approveSummary('${summary.id}', 'rejected')">✕ Reject</button>
+                </div>
+                ${summary.status === 'approved' ? `<div class="alert alert-success" style="margin-top:var(--space-4)"><span class="alert-icon">✅</span><strong>CLINICIAN VERIFIED</strong> — Approved on ${formatDateTime(summary.approved_at)}</div>` : ''}
+            `;
+        }
+
+        function renderHistory(sessions) {
+            const container = document.getElementById('history-content');
+            if (!sessions.length) {
+                container.innerHTML = '<div class="empty-state"><div class="empty-state-title">No history available</div></div>';
+                return;
+            }
+
+            let html = '';
+            sessions.forEach(s => {
+                html += `<h3 style="margin-bottom:var(--space-4)">Session: ${escapeHtml(s.chief_complaint || 'General')} <span class="text-muted text-sm">(${formatDate(s.created_at)})</span></h3>`;
+                if (s.answers && s.answers.length) {
+                    s.answers.forEach(a => {
+                        html += `
+                            <div class="answer-item">
+                                <div class="question">${escapeHtml(a.question_key.replace(/_/g, ' '))}</div>
+                                <div class="answer">${escapeHtml(a.answer_text)}</div>
+                                <div class="meta">${a.input_method === 'voice' ? '🎤 Voice' : '⌨️ Text'} • ${formatDateTime(a.created_at)}</div>
+                            </div>`;
+                    });
+                }
+                html += '<hr style="margin:var(--space-6) 0;border:none;border-top:1px solid var(--gray-100)">';
+            });
+            container.innerHTML = html;
+        }
+
+        function renderDocuments(docs) {
+            const container = document.getElementById('documents-content');
+            if (!docs.length) return;
+
+            container.innerHTML = docs.map(d => {
+                const iconMap = { prescription: '💊', lab_report: '🧪', discharge_summary: '🏥' };
+                let extractedHtml = '';
+                if (d.extracted_data && typeof d.extracted_data === 'object') {
+                    const ed = d.extracted_data;
+                    const parts = [];
+                    if (ed.diagnoses && ed.diagnoses.length) parts.push(`<strong>Diagnoses:</strong> ${ed.diagnoses.join(', ')}`);
+                    if (ed.medications && ed.medications.length) parts.push(`<strong>Medications:</strong> ${ed.medications.map(m => typeof m === 'object' ? m.name : m).join(', ')}`);
+                    if (parts.length) extractedHtml = `<div style="margin-top:var(--space-2);font-size:0.8125rem;color:var(--gray-600)">${parts.join(' | ')}</div>`;
+                }
+                return `
+                    <div class="doc-list-item">
+                        <div style="display:flex;align-items:center;gap:var(--space-3)">
+                            <div class="doc-icon ${d.category}">${iconMap[d.category] || '📄'}</div>
+                            <div>
+                                <strong>${escapeHtml(d.filename)}</strong>
+                                <div class="text-sm text-muted">${d.category.replace('_', ' ')} • ${formatDate(d.uploaded_at)}</div>
+                                ${extractedHtml}
+                            </div>
+                        </div>
+                        <span class="badge badge-neutral">${d.file_type.toUpperCase()}</span>
+                    </div>`;
+            }).join('');
+        }
+
+        function renderTimeline(timeline) {
+            const container = document.getElementById('timeline-content');
+            if (!timeline.length) return;
+
+            container.innerHTML = `<div class="timeline">${timeline.map(e => `
+                <div class="timeline-item">
+                    <div class="timeline-dot ${e.event_type}"></div>
+                    <div class="timeline-content">
+                        <div class="timeline-date">${formatDate(e.event_date)}</div>
+                        <h4>${escapeHtml(e.title)}</h4>
+                        ${e.description ? `<p>${escapeHtml(e.description)}</p>` : ''}
+                        <span class="badge badge-neutral" style="margin-top:var(--space-2)">${e.event_type.replace('_', ' ')}</span>
+                    </div>
+                </div>
+            `).join('')}</div>`;
+        }
+
+        function renderAlerts(sessions) {
+            const container = document.getElementById('alerts-content');
+            const allFlags = sessions.flatMap(s => (s.red_flags || []).map(f => ({...f, session_complaint: s.chief_complaint})));
+
+            if (!allFlags.length) return;
+
+            container.innerHTML = allFlags.map(f => `
+                <div class="alert ${f.severity === 'HIGH' ? 'alert-danger' : 'alert-warning'}" style="margin-bottom:var(--space-3)">
+                    <span class="alert-icon">${f.severity === 'HIGH' ? '🔴' : '🟡'}</span>
+                    <div style="flex:1">
+                        <strong>${escapeHtml(f.title)}</strong>
+                        <p style="margin-top:var(--space-1)">${escapeHtml(f.description)}</p>
+                        <div class="text-xs text-muted" style="margin-top:var(--space-2)">Session: ${escapeHtml(f.session_complaint || '—')} • ${formatDateTime(f.created_at)}</div>
+                    </div>
+                    ${f.resolved ? '<span class="badge badge-success">Resolved</span>' : '<span class="badge badge-danger">Active</span>'}
+                </div>
+            `).join('');
+        }
+
+        async function generateSummary() {
+            if (!patientData || !patientData.sessions.length) {
+                toast.warning('No sessions to generate summary from.');
+                return;
+            }
+            const sessionId = patientData.sessions[0].id;
+            toast.info('Generating AI clinical summary...');
+
+            try {
+                const summary = await api.generateSummary(sessionId);
+                toast.success('Summary generated successfully!');
+                renderSummary(summary);
+                // Switch to summary tab
+                document.querySelector('[data-tab="tab-summary"]').click();
+            } catch (err) {
+                toast.error('Summary generation failed: ' + err.message);
+            }
+        }
+
+        async function approveSummary(summaryId, status) {
+            const notes = document.getElementById('doctor-notes')?.value || '';
+            try {
+                await api.approveSummary(summaryId, status, notes);
+                toast.success(`Summary ${status}!`);
+                loadPatient(); // Reload
+            } catch (err) {
+                toast.error('Failed: ' + err.message);
+            }
+        }
+
+        loadPatient();
+    </script>
+</body>
+</html>

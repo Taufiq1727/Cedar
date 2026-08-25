@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MediKiosk — AI-Powered Patient Case-Taking & Clinical History</title>
+    <meta name="description" content="MediKiosk automates clinical history-taking with AI-powered conversational intake, document processing, and physician-ready summaries for Indian hospitals.">
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/landing.css">
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar" id="navbar">
+        <div class="navbar-inner">
+            <a href="/" class="navbar-brand">
+                <div class="brand-icon">🏥</div>
+                MediKiosk
+            </a>
+            <div class="navbar-links">
+                <a href="#problem">Problem</a>
+                <a href="#how-it-works">How It Works</a>
+                <a href="#features">Features</a>
+                <a href="#security">Security</a>
+            </div>
+            <div class="navbar-cta">
+                <a href="login.html" class="btn btn-ghost" style="color:rgba(255,255,255,0.8)">Login</a>
+                <a href="login.html?tab=register" class="btn btn-primary btn-sm">Get Started</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero -->
+    <section class="hero">
+        <div class="hero-particles">
+            <div class="particle"></div><div class="particle"></div><div class="particle"></div>
+            <div class="particle"></div><div class="particle"></div><div class="particle"></div>
+            <div class="particle"></div><div class="particle"></div>
+        </div>
+
+        <div class="hero-content">
+            <div class="hero-text">
+                <h1>AI-Powered<br><span class="gradient-text">Clinical History</span><br>Before The Consultation</h1>
+                <p>MediKiosk collects structured patient history through intelligent conversational intake, processes medical documents with OCR & AI, and delivers physician-ready clinical summaries — saving doctors critical time in Indian hospitals.</p>
+                <div class="hero-buttons">
+                    <a href="login.html?tab=register&role=patient" class="btn btn-primary btn-lg">Start Patient Intake</a>
+                    <a href="login.html?tab=login&role=doctor" class="btn btn-secondary btn-lg" style="border-color:rgba(255,255,255,0.2);color:white;background:rgba(255,255,255,0.06)">Doctor Login</a>
+                </div>
+            </div>
+            <div class="hero-visual">
+                <div class="hero-card">
+                    <div class="hero-card-header">
+                        <div class="icon">🤖</div>
+                        <div>
+                            <h3 style="color:white;font-size:1rem">AI Clinical Intake</h3>
+                            <span>Live Demo</span>
+                        </div>
+                    </div>
+                    <div class="demo-chat">
+                        <div class="demo-message">
+                            <div class="demo-avatar ai">🤖</div>
+                            <div class="demo-bubble ai">Hello! Please tell me your main health concern.</div>
+                        </div>
+                        <div class="demo-message">
+                            <div class="demo-avatar user">👤</div>
+                            <div class="demo-bubble user">I have been having chest pain for 3 days, it gets worse when I walk.</div>
+                        </div>
+                        <div class="demo-message">
+                            <div class="demo-avatar ai">🤖</div>
+                            <div class="demo-bubble ai">I understand. On a scale of 1-10, how severe is the pain?<br><br><span style="color:var(--accent-400);font-size:0.75rem">✓ Extracted: Chest pain, 3 days, exertion-related</span></div>
+                        </div>
+                        <div class="demo-message">
+                            <div class="demo-avatar ai">🤖</div>
+                            <div class="demo-bubble ai" style="border-color:rgba(239,68,68,0.3);background:rgba(239,68,68,0.1)">⚠️ <strong>Priority Alert:</strong> Potential cardiac symptoms detected. Flagged for urgent review.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Stats Bar -->
+        <div class="stats-bar">
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <h3>2-5 min</h3>
+                    <p>Average consultation time in Indian OPDs</p>
+                </div>
+                <div class="stat-item">
+                    <h3>70%</h3>
+                    <p>Clinical history missed during rushed visits</p>
+                </div>
+                <div class="stat-item">
+                    <h3>5x</h3>
+                    <p>More structured data captured by AI</p>
+                </div>
+                <div class="stat-item">
+                    <h3>3 Languages</h3>
+                    <p>English, Hindi, Kannada support</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Problem Section -->
+    <section class="section" id="problem">
+        <div class="container">
+            <div class="section-header">
+                <span class="overline">The Problem</span>
+                <h2>Doctors Can't Collect Detailed History in 2 Minutes</h2>
+                <p>Indian hospital outpatient departments handle hundreds of patients daily. Doctors have mere minutes per patient, making comprehensive history-taking nearly impossible.</p>
+            </div>
+            <div class="problem-grid">
+                <div>
+                    <div class="problem-stat">
+                        <span class="number">2-5m</span>
+                        <p>Average doctor-patient consultation time in Indian government hospitals</p>
+                    </div>
+                    <div class="problem-stat" style="margin-top:var(--space-4)">
+                        <span class="number">78%</span>
+                        <p>of prescriptions written without complete patient history review</p>
+                    </div>
+                    <div class="problem-stat" style="margin-top:var(--space-4)">
+                        <span class="number">42%</span>
+                        <p>of patients unable to recall complete medication history</p>
+                    </div>
+                </div>
+                <div>
+                    <h3 style="margin-bottom:var(--space-4)">Critical Gaps in Current Workflow</h3>
+                    <ul style="list-style:none;display:flex;flex-direction:column;gap:var(--space-3)">
+                        <li style="display:flex;gap:var(--space-3);align-items:flex-start">
+                            <span style="color:var(--danger);font-size:1.25rem">✕</span>
+                            <span style="color:var(--gray-600)">No time to review old prescriptions, lab reports, or discharge summaries</span>
+                        </li>
+                        <li style="display:flex;gap:var(--space-3);align-items:flex-start">
+                            <span style="color:var(--danger);font-size:1.25rem">✕</span>
+                            <span style="color:var(--gray-600)">Incomplete history leads to missed diagnoses and duplicate tests</span>
+                        </li>
+                        <li style="display:flex;gap:var(--space-3);align-items:flex-start">
+                            <span style="color:var(--danger);font-size:1.25rem">✕</span>
+                            <span style="color:var(--gray-600)">Patients struggle to articulate symptoms in clinical terminology</span>
+                        </li>
+                        <li style="display:flex;gap:var(--space-3);align-items:flex-start">
+                            <span style="color:var(--danger);font-size:1.25rem">✕</span>
+                            <span style="color:var(--gray-600)">Language barriers in multilingual regions affect care quality</span>
+                        </li>
+                        <li style="display:flex;gap:var(--space-3);align-items:flex-start">
+                            <span style="color:var(--danger);font-size:1.25rem">✕</span>
+                            <span style="color:var(--gray-600)">Paper records are unstructured and often illegible</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- How It Works -->
+    <section class="section section-dark" id="how-it-works">
+        <div class="container">
+            <div class="section-header">
+                <span class="overline">How It Works</span>
+                <h2>From Patient Check-In to Doctor-Ready Summary</h2>
+                <p>MediKiosk transforms the pre-consultation workflow into a structured, AI-powered process.</p>
+            </div>
+            <div class="steps-grid">
+                <div class="step-card">
+                    <div class="step-number">1</div>
+                    <h3 style="color:white">Patient Check-In</h3>
+                    <p style="color:rgba(255,255,255,0.5)">Patient registers, selects language, gives consent, and begins the AI-guided intake.</p>
+                    <div class="step-connector"></div>
+                </div>
+                <div class="step-card">
+                    <div class="step-number">2</div>
+                    <h3 style="color:white">AI Clinical Intake</h3>
+                    <p style="color:rgba(255,255,255,0.5)">Conversational questions adapt to the patient's condition. Voice or text input in 3 languages.</p>
+                    <div class="step-connector"></div>
+                </div>
+                <div class="step-card">
+                    <div class="step-number">3</div>
+                    <h3 style="color:white">Document Processing</h3>
+                    <p style="color:rgba(255,255,255,0.5)">Upload prescriptions, lab reports, discharge summaries. OCR + AI extracts key clinical data.</p>
+                    <div class="step-connector"></div>
+                </div>
+                <div class="step-card">
+                    <div class="step-number">4</div>
+                    <h3 style="color:white">Doctor Reviews</h3>
+                    <p style="color:rgba(255,255,255,0.5)">Structured clinical summary, timeline, and red flags ready for the physician.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features -->
+    <section class="section" id="features">
+        <div class="container">
+            <div class="section-header">
+                <span class="overline">Key Features</span>
+                <h2>Built for Indian Healthcare</h2>
+                <p>Every feature is designed to solve real problems in high-volume hospital OPDs.</p>
+            </div>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon blue">🧠</div>
+                    <h3>AI Clinical Intake</h3>
+                    <p>Adaptive questioning engine with 5 clinical pathways. Gemini AI extracts structured information from natural language.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon green">🎤</div>
+                    <h3>Multilingual Voice Input</h3>
+                    <p>Speak in English, Hindi, or Kannada. Built-in speech recognition with text editing and confirmation.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon amber">📄</div>
+                    <h3>Document OCR + AI Extraction</h3>
+                    <p>Upload prescriptions, lab reports, discharge summaries. AI extracts diagnoses, medications, and lab values.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon red">🚨</div>
+                    <h3>Red Flag Detection</h3>
+                    <p>Rule-based engine detects priority symptoms in real-time. No LLM dependency for safety-critical alerts.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon blue">📋</div>
+                    <h3>AI Clinical Summary</h3>
+                    <p>Generates physician-ready HPI, PMH, medications, allergies, and assessment. Editable and approvable by doctors.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon green">📊</div>
+                    <h3>Medical Timeline</h3>
+                    <p>Chronological view of diagnoses, medications, procedures, and consultations. Auto-generated from all patient data.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Benefits -->
+    <section class="section section-dark">
+        <div class="container">
+            <div class="section-header">
+                <span class="overline">Benefits</span>
+                <h2>Better Care for Everyone</h2>
+            </div>
+            <div class="benefits-grid">
+                <div class="benefit-column">
+                    <h3>👨‍⚕️ For Doctors</h3>
+                    <div class="benefit-item">
+                        <span class="benefit-check">✓</span>
+                        <p>Pre-structured clinical history ready before the patient walks in</p>
+                    </div>
+                    <div class="benefit-item">
+                        <span class="benefit-check">✓</span>
+                        <p>Red flags highlighted with priority triaging</p>
+                    </div>
+                    <div class="benefit-item">
+                        <span class="benefit-check">✓</span>
+                        <p>Complete medication and document history at a glance</p>
+                    </div>
+                    <div class="benefit-item">
+                        <span class="benefit-check">✓</span>
+                        <p>Focus consultation time on examination and treatment</p>
+                    </div>
+                    <div class="benefit-item">
+                        <span class="benefit-check">✓</span>
+                        <p>FHIR-compatible records for interoperability</p>
+                    </div>
+                </div>
+                <div class="benefit-column">
+                    <h3>🧑‍🤝‍🧑 For Patients</h3>
+                    <div class="benefit-item">
+                        <span class="benefit-check">✓</span>
+                        <p>Communicate symptoms comfortably in their own language</p>
+                    </div>
+                    <div class="benefit-item">
+                        <span class="benefit-check">✓</span>
+                        <p>No need to remember entire medical history — documents are processed by AI</p>
+                    </div>
+                    <div class="benefit-item">
+                        <span class="benefit-check">✓</span>
+                        <p>Voice input for patients who cannot type</p>
+                    </div>
+                    <div class="benefit-item">
+                        <span class="benefit-check">✓</span>
+                        <p>Shorter waiting time with pre-consultation intake</p>
+                    </div>
+                    <div class="benefit-item">
+                        <span class="benefit-check">✓</span>
+                        <p>Better clinical outcomes through comprehensive history</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Security -->
+    <section class="section" id="security">
+        <div class="container">
+            <div class="section-header">
+                <span class="overline">Privacy & Security</span>
+                <h2>Healthcare-Grade Data Protection</h2>
+                <p>Patient data is handled with enterprise-level security practices.</p>
+            </div>
+            <div class="security-grid">
+                <div class="security-card">
+                    <div class="icon">🔐</div>
+                    <h3>Encrypted Authentication</h3>
+                    <p>JWT tokens with bcrypt password hashing. Role-based access control for patients and doctors.</p>
+                </div>
+                <div class="security-card">
+                    <div class="icon">📋</div>
+                    <h3>Consent Management</h3>
+                    <p>Explicit patient consent with timestamped audit trail before any data collection begins.</p>
+                </div>
+                <div class="security-card">
+                    <div class="icon">🛡️</div>
+                    <h3>Audit Logging</h3>
+                    <p>All access and modifications are logged. No clinical data is exposed without authentication.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA -->
+    <section class="cta-section">
+        <div class="container">
+            <h2>Ready to Transform Clinical Intake?</h2>
+            <p>Start collecting structured patient history today. No installation required.</p>
+            <div class="cta-buttons">
+                <a href="login.html?tab=register&role=patient" class="btn btn-white btn-lg">Patient Registration</a>
+                <a href="login.html?tab=register&role=doctor" class="btn btn-outline-white btn-lg">Doctor Registration</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <p><strong>MediKiosk</strong> — AI-Powered Patient Case-Taking Software</p>
+            <p>Smart India Hackathon 2026 • Built with FastAPI, PostgreSQL, Gemini AI</p>
+            <p style="margin-top:var(--space-2);font-size:0.75rem;color:rgba(255,255,255,0.3)">Disclaimer: This is a technology solution. All AI-generated content requires clinician verification. Not a medical device.</p>
+        </div>
+    </footer>
+
+    <script>
+        // Navbar scroll effect
+        window.addEventListener('scroll', () => {
+            document.getElementById('navbar').classList.toggle('scrolled', window.scrollY > 50);
+        });
+    </script>
+</body>
+</html>

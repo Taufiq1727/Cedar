@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Doctor Dashboard — MediKiosk</title>
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/dashboard.css">
+    <link rel="stylesheet" href="css/doctor.css">
+</head>
+<body>
+    <div class="dashboard-layout">
+        <!-- Header -->
+        <header class="dash-header">
+            <div class="dash-header-left">
+                <a href="/" class="dash-brand"><div class="icon">🏥</div> MediKiosk</a>
+                <nav class="dash-nav">
+                    <a href="doctor-dashboard.html" class="active">Patient Queue</a>
+                </nav>
+            </div>
+            <div class="dash-header-right">
+                <div class="dash-user">
+                    <div>
+                        <div class="dash-user-name" id="user-name">Doctor</div>
+                        <div class="dash-user-role">Physician</div>
+                    </div>
+                    <div class="dash-user-avatar" id="user-avatar">D</div>
+                </div>
+                <button class="btn btn-ghost btn-sm" onclick="logout()">Logout</button>
+            </div>
+        </header>
+
+        <!-- Content -->
+        <main class="dash-content-wide">
+            <div class="page-header">
+                <h1>Patient Queue</h1>
+                <p>Review and manage incoming patient clinical intakes</p>
+            </div>
+
+            <!-- Quick Stats -->
+            <div class="quick-stats">
+                <div class="quick-stat">
+                    <div class="label">Total Patients</div>
+                    <div class="value" id="stat-total">—</div>
+                </div>
+                <div class="quick-stat">
+                    <div class="label">🔴 High Priority</div>
+                    <div class="value" id="stat-high" style="color:var(--danger)">—</div>
+                </div>
+                <div class="quick-stat">
+                    <div class="label">🟡 Pending Review</div>
+                    <div class="value" id="stat-pending" style="color:var(--warning)">—</div>
+                </div>
+                <div class="quick-stat">
+                    <div class="label">✅ Approved</div>
+                    <div class="value" id="stat-approved" style="color:var(--success)">—</div>
+                </div>
+            </div>
+
+            <!-- Filter Bar -->
+            <div class="filter-bar">
+                <input type="text" class="search-input" placeholder="🔍 Search by patient name or complaint..." id="search-input" oninput="filterQueue()">
+                <button class="filter-btn active" data-filter="all" onclick="setFilter('all', this)">All</button>
+                <button class="filter-btn" data-filter="HIGH" onclick="setFilter('HIGH', this)">🔴 High</button>
+                <button class="filter-btn" data-filter="MEDIUM" onclick="setFilter('MEDIUM', this)">🟡 Medium</button>
+                <button class="filter-btn" data-filter="completed" onclick="setFilter('completed', this)">Completed</button>
+            </div>
+
+            <!-- Queue Table -->
+            <div class="dash-card">
+                <div class="dash-card-body" style="padding:0;overflow-x:auto">
+                    <table class="queue-table">
+                        <thead>
+                            <tr>
+                                <th>Patient</th>
+                                <th>Chief Complaint</th>
+                                <th>Priority</th>
+                                <th>Status</th>
+                                <th>Time</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="queue-body">
+                            <tr>
+                                <td colspan="6">
+                                    <div class="empty-state">
+                                        <div class="empty-state-icon">📋</div>
+                                        <div class="empty-state-title">No patients in queue</div>
+                                        <div class="empty-state-text">Patients will appear here once they complete their clinical intake.</div>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script src="js/toast.js"></script>
+    <script src="js/utils.js"></script>
+    <script>
+        if (!requireAuth('doctor')) { /* redirected */ }
+
+        document.getElementById('user-name').textContent = api.getName();
+        document.getElementById('user-avatar').textContent = (api.getName() || 'D')[0].toUpperCase();
+
+        function logout() {
+            api.clearAuth();
+            window.location.href = '/login.html';
+        }
+
+        let allPatients = [];
+        let currentFilter = 'all';
+
+        async function loadQueue() {
+            try {
+                allPatients = await api.getDoctorPatients();
+
+                // Stats
+                document.getElementById('stat-total').textContent = allPatients.length;
+                document.getElementById('stat-high').textContent = allPatients.filter(p => p.priority === 'HIGH').length;
+                document.getElementById('stat-pending').textContent = allPatients.filter(p => p.status === 'completed' && p.summary_status !== 'approved').length;
+                document.getElementById('stat-approved').textContent = allPatients.filter(p => p.summary_status === 'approved').length;
+
+                renderQueue(allPatients);
+            } catch (err) {
+                toast.error('Failed to load patient queue: ' + err.message);
+            }
+        }
+
+        function renderQueue(patients) {
+            const tbody = document.getElementById('queue-body');
+
+            if (patients.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state"><div class="empty-state-title">No patients match the filter</div></div></td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = patients.map(p => `
+                <tr onclick="viewPatient('${p.patient_id}')">
+                    <td>
+                        <div class="patient-cell">
+                            <div class="patient-avatar">${(p.patient_name || '?')[0].toUpperCase()}</div>
+                            <div>
+                                <div class="patient-name">${escapeHtml(p.patient_name)}</div>
+                                <div class="patient-detail">${p.patient_age ? p.patient_age + 'y' : ''} ${p.patient_gender ? '• ' + p.patient_gender : ''}</div>
+                            </div>
+                        </div>
+                    </td>
+                    <td>${escapeHtml(p.chief_complaint || '—')}</td>
+                    <td>${priorityBadge(p.priority)}</td>
+                    <td>${statusBadge(p.status)}</td>
+                    <td><span class="text-sm text-muted">${formatTimeAgo(p.created_at)}</span></td>
+                    <td>
+                        <button class="btn btn-primary btn-sm" onclick="event.stopPropagation();viewPatient('${p.patient_id}')">Review →</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function setFilter(filter, btn) {
+            currentFilter = filter;
+            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            filterQueue();
+        }
+
+        function filterQueue() {
+            const search = document.getElementById('search-input').value.toLowerCase();
+            let filtered = allPatients;
+
+            if (currentFilter === 'HIGH' || currentFilter === 'MEDIUM') {
+                filtered = filtered.filter(p => p.priority === currentFilter);
+            } else if (currentFilter === 'completed') {
+                filtered = filtered.filter(p => p.status === 'completed');
+            }
+
+            if (search) {
+                filtered = filtered.filter(p =>
+                    (p.patient_name || '').toLowerCase().includes(search) ||
+                    (p.chief_complaint || '').toLowerCase().includes(search)
+                );
+            }
+
+            renderQueue(filtered);
+        }
+
+        function viewPatient(patientId) {
+            window.location.href = `doctor-patient.html?id=${patientId}`;
+        }
+
+        loadQueue();
+    </script>
+</body>
+</html>

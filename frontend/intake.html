@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Health Check-In — MediKiosk</title>
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/intake.css">
+</head>
+<body>
+    <div class="intake-layout">
+        <!-- Header -->
+        <header class="intake-header">
+            <div class="intake-header-left">
+                <a href="patient-dashboard.html" class="btn btn-ghost btn-sm">← Back</a>
+                <span class="intake-title">🩺 Health Check-In</span>
+                <span class="intake-pathway" id="pathway-label"></span>
+            </div>
+            <div class="intake-progress" id="progress-section" style="display:none">
+                <span id="progress-text">0%</span>
+                <div class="progress-bar"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
+            </div>
+        </header>
+
+        <!-- Consent Overlay -->
+        <div class="consent-overlay" id="consent-overlay">
+            <div class="consent-card">
+                <div class="consent-header">
+                    <h2>🏥 Start Your Health Check-In</h2>
+                    <p>MediKiosk collects your health information before your doctor's appointment</p>
+                </div>
+                <div class="consent-body">
+                    <h3>Select Language</h3>
+                    <div class="language-selector">
+                        <button class="lang-btn active" data-lang="en" onclick="selectLang('en', this)">
+                            <span class="flag">🇬🇧</span>
+                            <span class="name">English</span>
+                        </button>
+                        <button class="lang-btn" data-lang="hi" onclick="selectLang('hi', this)">
+                            <span class="flag">🇮🇳</span>
+                            <span class="name">हिन्दी</span>
+                        </button>
+                        <button class="lang-btn" data-lang="kn" onclick="selectLang('kn', this)">
+                            <span class="flag">🇮🇳</span>
+                            <span class="name">ಕನ್ನಡ</span>
+                        </button>
+                    </div>
+
+                    <h3>Consent</h3>
+                    <div class="consent-items">
+                        <label class="consent-check">
+                            <input type="checkbox" id="consent-data" required>
+                            I consent to sharing my health information for clinical assessment purposes.
+                        </label>
+                        <label class="consent-check">
+                            <input type="checkbox" id="consent-ai" required>
+                            I understand that AI is used to assist in collecting my health history, and all information will be verified by a qualified doctor.
+                        </label>
+                        <label class="consent-check">
+                            <input type="checkbox" id="consent-privacy" required>
+                            I agree to the data privacy and security practices of this platform.
+                        </label>
+                    </div>
+
+                    <button class="btn btn-primary btn-lg" style="width:100%;margin-top:var(--space-4)" id="start-intake-btn" onclick="startIntake()">
+                        Begin Health Check-In
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chat Area -->
+        <div class="chat-container" id="chat-container"></div>
+
+        <!-- Input Area -->
+        <div class="chat-input-area" id="input-area" style="display:none">
+            <div class="chat-input-inner">
+                <div class="chat-input-wrapper">
+                    <textarea class="chat-input" id="chat-input" placeholder="Type your answer here..." rows="1" onkeydown="handleKeyDown(event)"></textarea>
+                    <button class="mic-btn" id="mic-btn" onclick="toggleVoice()" title="Voice input">🎤</button>
+                </div>
+                <button class="send-btn" id="send-btn" onclick="sendMessage()" title="Send">➤</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script src="js/toast.js"></script>
+    <script src="js/voice.js"></script>
+    <script src="js/utils.js"></script>
+    <script>
+        if (!requireAuth('patient')) { /* redirected */ }
+
+        let sessionId = null;
+        let currentLanguage = 'en';
+        let currentQuestionKey = null;
+        let isComplete = false;
+        let patientId = null;
+
+        function selectLang(lang, btn) {
+            currentLanguage = lang;
+            document.querySelectorAll('.lang-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            voiceInput.setLanguage(lang);
+        }
+
+        async function startIntake() {
+            const consent1 = document.getElementById('consent-data').checked;
+            const consent2 = document.getElementById('consent-ai').checked;
+            const consent3 = document.getElementById('consent-privacy').checked;
+            if (!consent1 || !consent2 || !consent3) {
+                toast.warning('Please accept all consent items to continue.');
+                return;
+            }
+
+            const btn = document.getElementById('start-intake-btn');
+            btn.disabled = true;
+            btn.textContent = 'Starting...';
+
+            try {
+                const profile = await api.getPatientProfile();
+                patientId = profile.id;
+
+                const result = await api.startIntake(currentLanguage, true);
+                sessionId = result.session_id;
+                currentQuestionKey = result.question_key;
+
+                document.getElementById('consent-overlay').style.display = 'none';
+                document.getElementById('input-area').style.display = 'block';
+                document.getElementById('progress-section').style.display = 'flex';
+
+                addMessage('ai', result.question_text);
+            } catch (err) {
+                toast.error('Failed to start intake: ' + err.message);
+                btn.disabled = false;
+                btn.textContent = 'Begin Health Check-In';
+            }
+        }
+
+        function addMessage(type, text, extras = {}) {
+            const container = document.getElementById('chat-container');
+            const div = document.createElement('div');
+            div.className = `chat-message ${type}`;
+
+            const avatar = type === 'ai' ? '🤖' : '👤';
+            const avatarClass = type === 'ai' ? 'ai' : 'user';
+
+            let content = `<div class="chat-avatar ${avatarClass}">${avatar}</div>`;
+            content += `<div class="chat-bubble ${avatarClass}">${escapeHtml(text)}`;
+
+            // Add options if present
+            if (extras.options && extras.options.length > 0 && type === 'ai') {
+                content += '<div class="chat-options">';
+                extras.options.forEach(opt => {
+                    content += `<button class="chat-option-btn" onclick="selectOption('${escapeHtml(opt)}')">${escapeHtml(opt)}</button>`;
+                });
+                content += '</div>';
+            }
+
+            // Add red flag alerts
+            if (extras.red_flags && extras.red_flags.length > 0) {
+                extras.red_flags.forEach(flag => {
+                    if (flag.severity === 'HIGH' || flag.severity === 'MEDIUM') {
+                        content += `<div class="chat-alert"><strong>⚠️ ${escapeHtml(flag.title)}</strong>${escapeHtml(flag.description)}</div>`;
+                    }
+                });
+            }
+
+            // Add extracted data indicator
+            if (extras.extracted_data && extras.extracted_data.extracted_value && type === 'user') {
+                content += `<div class="extracted-chip">✓ Data captured</div>`;
+            }
+
+            content += '</div>';
+            div.innerHTML = content;
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function addTypingIndicator() {
+            const container = document.getElementById('chat-container');
+            const div = document.createElement('div');
+            div.className = 'chat-message';
+            div.id = 'typing-indicator';
+            div.innerHTML = `
+                <div class="chat-avatar ai">🤖</div>
+                <div class="chat-bubble">
+                    <div class="typing-indicator">
+                        <div class="typing-dot"></div>
+                        <div class="typing-dot"></div>
+                        <div class="typing-dot"></div>
+                    </div>
+                </div>`;
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function removeTypingIndicator() {
+            const el = document.getElementById('typing-indicator');
+            if (el) el.remove();
+        }
+
+        function selectOption(option) {
+            document.getElementById('chat-input').value = option;
+            sendMessage();
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('chat-input');
+            const text = input.value.trim();
+            if (!text || !sessionId || isComplete) return;
+
+            // Disable input
+            const sendBtn = document.getElementById('send-btn');
+            sendBtn.disabled = true;
+            input.value = '';
+
+            // Show user message
+            addMessage('user', text);
+
+            // Show typing indicator
+            addTypingIndicator();
+
+            try {
+                const result = await api.submitAnswer(sessionId, text, 'text', currentQuestionKey);
+
+                removeTypingIndicator();
+
+                // Update progress
+                updateProgress(result.progress_pct);
+
+                // Update pathway label
+                if (result.pathway) {
+                    document.getElementById('pathway-label').textContent = `Pathway: ${result.pathway.replace('_', ' ')}`;
+                }
+
+                // Show any new red flag alerts
+                if (result.new_red_flags && result.new_red_flags.length > 0) {
+                    result.new_red_flags.forEach(flag => {
+                        addMessage('ai', '', { red_flags: [flag] });
+                    });
+                }
+
+                if (result.is_complete) {
+                    isComplete = true;
+                    showCompletion();
+                } else {
+                    currentQuestionKey = result.question_key;
+                    addMessage('ai', result.question_text, {
+                        options: result.options,
+                        red_flags: result.red_flags ? result.red_flags.filter(f => f.severity === 'HIGH') : [],
+                    });
+                }
+            } catch (err) {
+                removeTypingIndicator();
+                toast.error('Error: ' + err.message);
+            }
+
+            sendBtn.disabled = false;
+            input.focus();
+        }
+
+        function updateProgress(pct) {
+            document.getElementById('progress-text').textContent = `${pct}%`;
+            document.getElementById('progress-fill').style.width = `${pct}%`;
+        }
+
+        function showCompletion() {
+            document.getElementById('input-area').style.display = 'none';
+            updateProgress(100);
+
+            const container = document.getElementById('chat-container');
+            const div = document.createElement('div');
+            div.innerHTML = `
+                <div class="completion-card">
+                    <div style="font-size:3rem;margin-bottom:var(--space-3)">✅</div>
+                    <h3>Clinical Intake Complete!</h3>
+                    <p>Your health information has been collected and structured. A doctor will review your information shortly.</p>
+                    <div style="display:flex;gap:var(--space-3);justify-content:center;flex-wrap:wrap;margin-top:var(--space-4)">
+                        <button class="btn btn-white" onclick="uploadDocuments()">📄 Upload Documents</button>
+                        <button class="btn btn-white" onclick="generateSummary()">📋 Generate Summary</button>
+                        <a href="patient-dashboard.html" class="btn btn-outline-white" style="border-color:rgba(255,255,255,0.4)">← Dashboard</a>
+                    </div>
+                </div>`;
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function uploadDocuments() {
+            const container = document.getElementById('chat-container');
+            const div = document.createElement('div');
+            div.innerHTML = `
+                <div style="max-width:500px;margin:0 auto">
+                    <div class="doc-upload-section" onclick="document.getElementById('file-input').click()">
+                        <div class="icon">📁</div>
+                        <p><strong>Click to upload</strong> a medical document</p>
+                        <p style="font-size:0.75rem;color:var(--gray-400);margin-top:var(--space-1)">Supported: JPG, PNG, PDF (max 10MB)</p>
+                    </div>
+                    <input type="file" id="file-input" accept=".jpg,.jpeg,.png,.pdf" style="display:none" onchange="handleFileUpload(this)">
+                    <div class="doc-category-select">
+                        <button class="doc-cat-btn active" data-cat="prescription" onclick="selectDocCategory('prescription', this)">💊 Prescription</button>
+                        <button class="doc-cat-btn" data-cat="lab_report" onclick="selectDocCategory('lab_report', this)">🧪 Lab Report</button>
+                        <button class="doc-cat-btn" data-cat="discharge_summary" onclick="selectDocCategory('discharge_summary', this)">🏥 Discharge Summary</button>
+                    </div>
+                    <div id="upload-results"></div>
+                </div>`;
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        let selectedDocCategory = 'prescription';
+        function selectDocCategory(cat, btn) {
+            selectedDocCategory = cat;
+            document.querySelectorAll('.doc-cat-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+        }
+
+        async function handleFileUpload(input) {
+            const file = input.files[0];
+            if (!file) return;
+
+            toast.info(`Uploading ${file.name}...`);
+            const resultsDiv = document.getElementById('upload-results');
+
+            try {
+                const result = await api.uploadDocument(file, selectedDocCategory, sessionId);
+                toast.success('Document processed successfully!');
+
+                let extractedHtml = '';
+                if (result.extracted_data && typeof result.extracted_data === 'object') {
+                    const ed = result.extracted_data;
+                    if (ed.diagnoses && ed.diagnoses.length) {
+                        extractedHtml += `<p><strong>Diagnoses:</strong> ${ed.diagnoses.join(', ')}</p>`;
+                    }
+                    if (ed.medications && ed.medications.length) {
+                        extractedHtml += `<p><strong>Medications:</strong> ${ed.medications.map(m => typeof m === 'object' ? m.name : m).join(', ')}</p>`;
+                    }
+                    if (ed.lab_values && ed.lab_values.length) {
+                        extractedHtml += `<p><strong>Lab Values:</strong> ${ed.lab_values.map(l => typeof l === 'object' ? `${l.test_name}: ${l.value}` : l).join(', ')}</p>`;
+                    }
+                }
+
+                resultsDiv.innerHTML += `
+                    <div class="card" style="margin-top:var(--space-4)">
+                        <div class="card-body">
+                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--space-3)">
+                                <strong>📄 ${escapeHtml(file.name)}</strong>
+                                <span class="badge badge-success">Processed</span>
+                            </div>
+                            ${extractedHtml || '<p style="color:var(--gray-500);font-size:0.875rem">Processing complete. Data will be included in clinical summary.</p>'}
+                            <div class="alert alert-info" style="margin-top:var(--space-3);font-size:0.75rem">
+                                <span class="alert-icon">ℹ️</span>
+                                AI-extracted information — requires clinician verification.
+                            </div>
+                        </div>
+                    </div>`;
+            } catch (err) {
+                toast.error('Upload failed: ' + err.message);
+            }
+            input.value = '';
+        }
+
+        async function generateSummary() {
+            if (!sessionId) return;
+            toast.info('Generating AI clinical summary...');
+            try {
+                await api.completeSession(sessionId);
+                const summary = await api.generateSummary(sessionId);
+                toast.success('Clinical summary generated! The doctor can now review it.');
+
+                const container = document.getElementById('chat-container');
+                const div = document.createElement('div');
+                div.innerHTML = `
+                    <div class="card" style="max-width:600px;margin:var(--space-4) auto">
+                        <div class="card-header">
+                            <h3 style="font-size:1rem">📋 AI Clinical Summary</h3>
+                            ${statusBadge('generated')}
+                        </div>
+                        <div class="card-body">
+                            <pre style="white-space:pre-wrap;font-family:var(--font-primary);font-size:0.8125rem;color:var(--gray-700);line-height:1.6">${escapeHtml(summary.summary_text || JSON.stringify(summary.summary_json, null, 2))}</pre>
+                            <div class="alert alert-warning" style="margin-top:var(--space-4)">
+                                <span class="alert-icon">⚠️</span>
+                                AI-generated clinical intake summary. Requires clinician verification.
+                            </div>
+                        </div>
+                    </div>`;
+                container.appendChild(div);
+                container.scrollTop = container.scrollHeight;
+            } catch (err) {
+                toast.error('Summary generation failed: ' + err.message);
+            }
+        }
+
+        // Voice input
+        function toggleVoice() {
+            const micBtn = document.getElementById('mic-btn');
+            if (voiceInput.isListening) {
+                voiceInput.stop();
+                micBtn.classList.remove('recording');
+                micBtn.textContent = '🎤';
+            } else {
+                const started = voiceInput.start(
+                    (transcript, isFinal) => {
+                        document.getElementById('chat-input').value = transcript;
+                        if (isFinal) {
+                            micBtn.classList.remove('recording');
+                            micBtn.textContent = '🎤';
+                        }
+                    },
+                    (error) => {
+                        toast.warning(error);
+                        micBtn.classList.remove('recording');
+                        micBtn.textContent = '🎤';
+                    }
+                );
+                if (started) {
+                    micBtn.classList.add('recording');
+                    micBtn.textContent = '⏹';
+                    toast.info('Listening... Speak now.');
+                }
+            }
+        }
+
+        // Enter to send
+        function handleKeyDown(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        }
+
+        // Auto-resize textarea
+        const chatInput = document.getElementById('chat-input');
+        chatInput.addEventListener('input', () => {
+            chatInput.style.height = 'auto';
+            chatInput.style.height = Math.min(chatInput.scrollHeight, 120) + 'px';
+        });
+    </script>
+</body>
+</html>

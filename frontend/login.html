@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login — MediKiosk</title>
+    <meta name="description" content="Login or register for MediKiosk - AI-powered clinical history taking.">
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/auth.css">
+</head>
+<body>
+    <div class="auth-page">
+        <div class="auth-left">
+            <a href="/" class="brand">
+                <div class="brand-icon">🏥</div>
+                MediKiosk
+            </a>
+            <div class="auth-card">
+                <div class="auth-tabs">
+                    <button class="auth-tab active" data-form="login" id="tab-login">Login</button>
+                    <button class="auth-tab" data-form="register" id="tab-register">Register</button>
+                </div>
+                <div class="auth-form-container">
+                    <!-- Login Form -->
+                    <form class="auth-form active" id="form-login" onsubmit="return handleLogin(event)">
+                        <h2>Welcome Back</h2>
+                        <p class="subtitle">Login to access your dashboard</p>
+                        <div class="form-group">
+                            <label class="form-label">Email</label>
+                            <input type="email" class="form-input" id="login-email" required placeholder="Enter your email">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Password</label>
+                            <input type="password" class="form-input" id="login-password" required placeholder="Enter your password">
+                        </div>
+                        <div id="login-error" class="form-error" style="margin-bottom:var(--space-3)"></div>
+                        <button type="submit" class="btn btn-primary" style="width:100%" id="login-btn">Login</button>
+                        <div class="auth-footer">
+                            Don't have an account? <a href="#" onclick="switchTab('register')">Register here</a>
+                        </div>
+                    </form>
+
+                    <!-- Register Form -->
+                    <form class="auth-form" id="form-register" onsubmit="return handleRegister(event)">
+                        <h2>Create Account</h2>
+                        <p class="subtitle">Choose your role to get started</p>
+
+                        <div class="role-selector">
+                            <button type="button" class="role-btn active" data-role="patient" onclick="selectRole('patient')">🧑 Patient</button>
+                            <button type="button" class="role-btn" data-role="doctor" onclick="selectRole('doctor')">👨‍⚕️ Doctor</button>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Full Name</label>
+                            <input type="text" class="form-input" id="reg-name" required placeholder="Enter your full name">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Email</label>
+                            <input type="email" class="form-input" id="reg-email" required placeholder="Enter your email">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Password</label>
+                            <input type="password" class="form-input" id="reg-password" required placeholder="Min 6 characters" minlength="6">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Phone</label>
+                            <input type="tel" class="form-input" id="reg-phone" placeholder="Phone number (optional)">
+                        </div>
+
+                        <!-- Patient-specific fields -->
+                        <div class="patient-fields active" id="patient-fields">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label class="form-label">Age</label>
+                                    <input type="number" class="form-input" id="reg-age" placeholder="Age" min="1" max="120">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Gender</label>
+                                    <select class="form-select" id="reg-gender">
+                                        <option value="">Select</option>
+                                        <option value="Male">Male</option>
+                                        <option value="Female">Female</option>
+                                        <option value="Other">Other</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Doctor-specific fields -->
+                        <div class="doctor-fields" id="doctor-fields">
+                            <div class="form-group">
+                                <label class="form-label">Hospital/Organization</label>
+                                <input type="text" class="form-input" id="reg-hospital" placeholder="Hospital name">
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label class="form-label">Professional ID</label>
+                                    <input type="text" class="form-input" id="reg-prof-id" placeholder="e.g., MCI number">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Specialization</label>
+                                    <input type="text" class="form-input" id="reg-specialization" placeholder="e.g., General Medicine">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="register-error" class="form-error" style="margin-bottom:var(--space-3)"></div>
+                        <button type="submit" class="btn btn-primary" style="width:100%" id="register-btn">Create Account</button>
+                        <div class="auth-footer">
+                            Already have an account? <a href="#" onclick="switchTab('login')">Login here</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script src="js/toast.js"></script>
+    <script>
+        let selectedRole = 'patient';
+
+        // Parse URL params for tab/role
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('tab') === 'register') switchTab('register');
+        if (params.get('role')) selectRole(params.get('role'));
+
+        // Redirect if already logged in
+        if (api.isLoggedIn()) {
+            window.location.href = api.getRole() === 'doctor' ? '/doctor-dashboard.html' : '/patient-dashboard.html';
+        }
+
+        function switchTab(tab) {
+            document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.auth-form').forEach(f => f.classList.remove('active'));
+            document.querySelector(`[data-form="${tab}"]`).classList.add('active');
+            document.getElementById(`form-${tab}`).classList.add('active');
+        }
+
+        function selectRole(role) {
+            selectedRole = role;
+            document.querySelectorAll('.role-btn').forEach(b => b.classList.remove('active'));
+            document.querySelector(`[data-role="${role}"]`).classList.add('active');
+            document.getElementById('patient-fields').classList.toggle('active', role === 'patient');
+            document.getElementById('doctor-fields').classList.toggle('active', role === 'doctor');
+        }
+
+        // Tab click handlers
+        document.querySelectorAll('.auth-tab').forEach(tab => {
+            tab.addEventListener('click', () => switchTab(tab.dataset.form));
+        });
+
+        async function handleLogin(e) {
+            e.preventDefault();
+            const btn = document.getElementById('login-btn');
+            const errorEl = document.getElementById('login-error');
+            errorEl.textContent = '';
+            btn.disabled = true;
+            btn.textContent = 'Logging in...';
+
+            try {
+                const result = await api.login(
+                    document.getElementById('login-email').value,
+                    document.getElementById('login-password').value
+                );
+                toast.success(`Welcome back, ${result.name}!`);
+                setTimeout(() => {
+                    window.location.href = result.role === 'doctor' ? '/doctor-dashboard.html' : '/patient-dashboard.html';
+                }, 500);
+            } catch (err) {
+                errorEl.textContent = err.message;
+                btn.disabled = false;
+                btn.textContent = 'Login';
+            }
+            return false;
+        }
+
+        async function handleRegister(e) {
+            e.preventDefault();
+            const btn = document.getElementById('register-btn');
+            const errorEl = document.getElementById('register-error');
+            errorEl.textContent = '';
+            btn.disabled = true;
+            btn.textContent = 'Creating account...';
+
+            const data = {
+                email: document.getElementById('reg-email').value,
+                password: document.getElementById('reg-password').value,
+                name: document.getElementById('reg-name').value,
+                role: selectedRole,
+                phone: document.getElementById('reg-phone').value || null,
+            };
+
+            if (selectedRole === 'patient') {
+                data.age = parseInt(document.getElementById('reg-age').value) || null;
+                data.gender = document.getElementById('reg-gender').value || null;
+            } else {
+                data.hospital = document.getElementById('reg-hospital').value || null;
+                data.professional_id = document.getElementById('reg-prof-id').value || null;
+                data.specialization = document.getElementById('reg-specialization').value || null;
+            }
+
+            try {
+                const result = await api.register(data);
+                toast.success(`Account created! Welcome, ${result.name}!`);
+                setTimeout(() => {
+                    window.location.href = result.role === 'doctor' ? '/doctor-dashboard.html' : '/patient-dashboard.html';
+                }, 500);
+            } catch (err) {
+                errorEl.textContent = err.message;
+                btn.disabled = false;
+                btn.textContent = 'Create Account';
+            }
+            return false;
+        }
+    </script>
+</body>
+</html>
