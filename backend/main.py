@@ -1,10 +1,18 @@
 """MediKiosk Backend - FastAPI Application Entry Point."""
+import os
+import sys
 import logging
+
+# Ensure backend directory is in sys.path
+backend_dir = os.path.dirname(os.path.abspath(__file__))
+if backend_dir not in sys.path:
+    sys.path.insert(0, backend_dir)
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from config import CORS_ORIGINS, UPLOAD_DIR
-from database import create_tables
+from database import create_tables, SessionLocal
 
 # Import all models to register them with SQLAlchemy
 import models  # noqa: F401
@@ -55,13 +63,19 @@ app.include_router(doctor_router)
 
 @app.on_event("startup")
 def startup():
-    """Create database tables on startup."""
-    logger.info("Creating database tables...")
+    """Create database tables and seed initial doctor accounts on startup."""
+    logger.info("Initializing database...")
     create_tables()
+    try:
+        from seed_doctors import seed_doctors
+        seed_doctors()
+        logger.info("Doctor accounts verified.")
+    except Exception as e:
+        logger.warning(f"Doctor seeding check: {e}")
     logger.info("MediKiosk API started successfully.")
 
 
-@app.get("/", tags=["Health"])
+@app.get("/api/health", tags=["Health"])
 def health_check():
     """Health check endpoint."""
     return {
@@ -89,3 +103,9 @@ def api_status():
             "fhir_export": True,
         },
     }
+
+
+# Mount frontend directory for direct UI access
+frontend_dir = os.path.abspath(os.path.join(backend_dir, "..", "frontend"))
+if os.path.exists(frontend_dir):
+    app.mount("/", StaticFiles(directory=frontend_dir, html=True), name="frontend")

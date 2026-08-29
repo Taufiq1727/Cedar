@@ -1,6 +1,6 @@
 """Doctor profile model."""
 import uuid
-from sqlalchemy import Column, String, ForeignKey
+from sqlalchemy import Column, String, Integer, ForeignKey
 from database import Base
 
 
@@ -13,3 +13,7 @@ class Doctor(Base):
     professional_id = Column(String, nullable=True)
     specialization = Column(String, nullable=True)
     department = Column(String, nullable=True)
+    years_of_experience = Column(Integer, nullable=True)
+    qualification = Column(String, nullable=True)
+    bio = Column(String, nullable=True)
+    profile_image_url = Column(String, nullable=True)

@@ -91,13 +91,16 @@ async def generate_summary_for_session(db: Session, session_id: str) -> dict:
 
 def _json_to_text(summary_json: dict) -> str:
     """Convert JSON summary to readable text format."""
+    if not isinstance(summary_json, dict):
+        return "No clinical summary available."
+
     lines = []
     lines.append("=" * 60)
     lines.append("AI-GENERATED CLINICAL INTAKE SUMMARY")
     lines.append("Requires Clinician Verification")
     lines.append("=" * 60)
 
-    if summary_json.get("patient_information"):
+    if summary_json.get("patient_information") and isinstance(summary_json["patient_information"], dict):
         pi = summary_json["patient_information"]
         lines.append(f"\nPATIENT: {pi.get('name', 'N/A')} | Age: {pi.get('age', 'N/A')} | Gender: {pi.get('gender', 'N/A')}")
 

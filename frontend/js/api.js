@@ -1,7 +1,7 @@
 /**
  * MediKiosk API Client - handles all backend communication.
  */
-const API_BASE = 'http://localhost:8000';
+const API_BASE = (window.location.port === '8000') ? '' : 'http://127.0.0.1:8000';
 
 class ApiClient {
     constructor() {

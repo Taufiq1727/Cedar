@@ -137,7 +137,9 @@
         document.getElementById('user-name').textContent = api.getName();
         document.getElementById('user-avatar').textContent = (api.getName() || 'D')[0].toUpperCase();
 
-        const patientId = new URLSearchParams(window.location.search).get('id');
+        const urlParams = new URLSearchParams(window.location.search);
+        const patientId = urlParams.get('id');
+        const targetSessionId = urlParams.get('session_id');
         if (!patientId) { window.location.href = '/doctor-dashboard.html'; }
 
         let patientData = null;
@@ -148,6 +150,13 @@
         async function loadPatient() {
             try {
                 patientData = await api.getDoctorPatientDetail(patientId);
+                if (targetSessionId && patientData.sessions && patientData.sessions.length > 0) {
+                    const idx = patientData.sessions.findIndex(s => s.id === targetSessionId);
+                    if (idx > 0) {
+                        const targetSes = patientData.sessions.splice(idx, 1)[0];
+                        patientData.sessions.unshift(targetSes);
+                    }
+                }
                 renderPatient();
             } catch (err) {
                 toast.error('Failed to load patient: ' + err.message);

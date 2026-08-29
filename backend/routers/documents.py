@@ -1,7 +1,9 @@
 """Document router - upload, OCR, and AI extraction."""
 import os
 import uuid
+from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from database import get_db
 from models.user import User
@@ -73,11 +75,18 @@ async def upload_document(
     extracted_json = await extract_document_info(ocr_text, category)
 
     # Save extracted data
+    conf = 0.7
+    if isinstance(extracted_json, dict) and "confidence" in extracted_json:
+        try:
+            conf = float(extracted_json["confidence"])
+        except (ValueError, TypeError):
+            conf = 0.7
+
     extracted = ExtractedDocumentData(
         document_id=doc.id,
         raw_text=ocr_text,
         extracted_json=extracted_json,
-        confidence=extracted_json.get("confidence", 0.7) if isinstance(extracted_json, dict) else 0.5,
+        confidence=conf,
         extraction_method="ocr_gemini",
     )
     db.add(extracted)
@@ -121,9 +130,11 @@ def get_patient_documents(
         result.append({
             "id": doc.id,
             "filename": doc.original_filename,
+            "stored_filename": doc.filename,
             "file_type": doc.file_type,
             "category": doc.category,
             "file_size": doc.file_size,
+            "file_url": f"/uploads/{doc.filename}",
             "uploaded_at": doc.uploaded_at.isoformat() if doc.uploaded_at else None,
             "has_extracted_data": extracted is not None,
             "extracted_data": extracted.extracted_json if extracted else None,
@@ -165,3 +176,40 @@ def get_extracted_data(
         "confidence": extracted.confidence,
         "extraction_method": extracted.extraction_method,
     }
+
+
+@router.get("/{doc_id}/view")
+def view_document(
+    doc_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Serve the actual document file for viewing/download."""
+    doc = db.query(MedicalDocument).filter(MedicalDocument.id == doc_id).first()
+    if not doc:
+        raise HTTPException(404, "Document not found")
+
+    # Access control
+    if user.role == "patient":
+        patient = db.query(Patient).filter(Patient.user_id == user.id).first()
+        if not patient or patient.id != doc.patient_id:
+            raise HTTPException(403, "Access denied")
+
+    file_path = doc.file_path
+    if not os.path.exists(file_path):
+        raise HTTPException(404, "File not found on server")
+
+    # Determine media type
+    media_types = {
+        "pdf": "application/pdf",
+        "jpg": "image/jpeg",
+        "jpeg": "image/jpeg",
+        "png": "image/png",
+    }
+    media_type = media_types.get(doc.file_type, "application/octet-stream")
+
+    return FileResponse(
+        path=file_path,
+        media_type=media_type,
+        filename=doc.original_filename,
+    )

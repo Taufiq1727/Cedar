@@ -67,6 +67,16 @@ async def process_answer(
         if complaint_info.get("initial_symptoms"):
             structured_data["initial_symptoms"] = complaint_info["initial_symptoms"]
 
+        # Auto-assign specialist doctor based on chief complaint
+        try:
+            from services.doctor_assignment_service import assign_doctor_by_complaint
+            assigned_id = assign_doctor_by_complaint(db, session.chief_complaint)
+            if assigned_id:
+                session.assigned_doctor_id = assigned_id
+                logger.info(f"Auto-assigned doctor {assigned_id} for session {session_id}")
+        except Exception as e:
+            logger.warning(f"Doctor assignment failed: {e}")
+
         q_key = "chief_complaint"
     else:
         q_key = question_key or "unknown"

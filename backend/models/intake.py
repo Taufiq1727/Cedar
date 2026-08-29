@@ -15,6 +15,7 @@ class IntakeSession(Base):
     chief_complaint = Column(String, nullable=True)
     pathway = Column(String, nullable=True)  # chest_pain, fever, headache, etc.
     progress_pct = Column(Integer, default=0)
+    assigned_doctor_id = Column(String, ForeignKey("doctors.id"), nullable=True, index=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     completed_at = Column(DateTime, nullable=True)
     structured_data = Column(JSON, nullable=True, default=dict)

@@ -1,4 +1,4 @@
-"""Doctor router - patient queue, review, and summary approval."""
+"""Doctor router - patient queue, review, summary approval, and profile."""
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -9,20 +9,68 @@ from models.doctor import Doctor
 from models.intake import IntakeSession, PatientAnswer
 from models.clinical import ClinicalSummary, RedFlagAlert, MedicalTimelineEvent
 from models.document import MedicalDocument, ExtractedDocumentData
-from services.auth_service import require_doctor
+from services.auth_service import require_doctor, get_current_user
 from services.timeline_service import generate_timeline
+from services.doctor_assignment_service import get_doctor_profile_for_patient
 from schemas.clinical import SummaryApproveRequest
 
 router = APIRouter(prefix="/doctor", tags=["Doctor Dashboard"])
 
 
+@router.get("/profile")
+def get_doctor_profile(user: User = Depends(require_doctor), db: Session = Depends(get_db)):
+    """Get the logged-in doctor's full profile."""
+    doctor = db.query(Doctor).filter(Doctor.user_id == user.id).first()
+    if not doctor:
+        raise HTTPException(404, "Doctor profile not found")
+
+    return {
+        "doctor_id": doctor.id,
+        "user_id": user.id,
+        "name": user.name,
+        "email": user.email,
+        "phone": user.phone,
+        "hospital": doctor.hospital,
+        "professional_id": doctor.professional_id,
+        "specialization": doctor.specialization,
+        "department": doctor.department,
+        "years_of_experience": doctor.years_of_experience,
+        "qualification": doctor.qualification,
+        "bio": doctor.bio,
+    }
+
+
 @router.get("/patients")
 def get_patient_queue(user: User = Depends(require_doctor), db: Session = Depends(get_db)):
-    """Get the patient queue - all sessions waiting for review."""
-    # Get all completed or in-progress sessions
-    sessions = db.query(IntakeSession).filter(
-        IntakeSession.status.in_(["completed", "in_progress", "reviewed"])
-    ).order_by(IntakeSession.created_at.desc()).all()
+    """Get the patient queue - sessions assigned to this doctor."""
+    doctor = db.query(Doctor).filter(Doctor.user_id == user.id).first()
+
+    # Get sessions assigned to this doctor, or all if no assignment system yet
+    query = db.query(IntakeSession).filter(
+        IntakeSession.status.in_(["completed", "in_progress", "reviewed", "approved"])
+    )
+
+    if doctor:
+        # Show sessions assigned to this doctor + unassigned sessions
+        query = query.filter(
+            (IntakeSession.assigned_doctor_id == doctor.id) |
+            (IntakeSession.assigned_doctor_id.is_(None))
+        )
+
+    all_sessions = query.order_by(IntakeSession.created_at.desc()).all()
+
+    # Deduplicate by patient: pick the most active/relevant session for each patient
+    status_rank = {'approved': 0, 'completed': 1, 'reviewed': 2, 'in_progress': 3}
+    patient_sessions = {}
+    for s in all_sessions:
+        if s.patient_id not in patient_sessions:
+            patient_sessions[s.patient_id] = s
+        else:
+            existing = patient_sessions[s.patient_id]
+            if status_rank.get(s.status, 9) < status_rank.get(existing.status, 9):
+                patient_sessions[s.patient_id] = s
+
+    sessions = list(patient_sessions.values())
 
     queue = []
     for s in sessions:
@@ -35,6 +83,11 @@ def get_patient_queue(user: User = Depends(require_doctor), db: Session = Depend
         high_flags = [f for f in red_flags if f.severity == "HIGH"]
         medium_flags = [f for f in red_flags if f.severity == "MEDIUM"]
         priority = "HIGH" if high_flags else ("MEDIUM" if medium_flags else "NORMAL")
+
+        # Get assigned doctor info
+        assigned_doc = None
+        if s.assigned_doctor_id:
+            assigned_doc = get_doctor_profile_for_patient(db, s.assigned_doctor_id)
 
         queue.append({
             "session_id": s.id,
@@ -51,13 +104,19 @@ def get_patient_queue(user: User = Depends(require_doctor), db: Session = Depend
             "high_priority_flags": len(high_flags),
             "has_summary": summary is not None,
             "summary_status": summary.status if summary else None,
+            "assigned_doctor": assigned_doc,
             "created_at": s.created_at.isoformat() if s.created_at else None,
             "completed_at": s.completed_at.isoformat() if s.completed_at else None,
         })
 
-    # Sort by priority (HIGH first) then by creation time
+    # Sort by priority (HIGH first) then by creation time (newest first)
     priority_order = {"HIGH": 0, "MEDIUM": 1, "NORMAL": 2}
-    queue.sort(key=lambda x: (priority_order.get(x["priority"], 3), x.get("created_at") or ""))
+    queue.sort(
+        key=lambda x: (
+            priority_order.get(x["priority"], 3),
+            -(datetime.fromisoformat(x["created_at"]).timestamp() if x.get("created_at") else 0)
+        )
+    )
 
     return queue
 
@@ -86,6 +145,11 @@ def get_patient_detail(
         red_flags = db.query(RedFlagAlert).filter(RedFlagAlert.session_id == s.id).all()
         summary = db.query(ClinicalSummary).filter(ClinicalSummary.session_id == s.id).first()
 
+        # Get assigned doctor info for this session
+        assigned_doc = None
+        if s.assigned_doctor_id:
+            assigned_doc = get_doctor_profile_for_patient(db, s.assigned_doctor_id)
+
         sessions_data.append({
             "id": s.id,
             "chief_complaint": s.chief_complaint,
@@ -94,6 +158,7 @@ def get_patient_detail(
             "progress_pct": s.progress_pct,
             "language": s.language,
             "structured_data": s.structured_data,
+            "assigned_doctor": assigned_doc,
             "created_at": s.created_at.isoformat() if s.created_at else None,
             "completed_at": s.completed_at.isoformat() if s.completed_at else None,
             "answers": [
@@ -129,7 +194,7 @@ def get_patient_detail(
             } if summary else None,
         })
 
-    # Get documents
+    # Get documents with file URLs
     documents = db.query(MedicalDocument).filter(
         MedicalDocument.patient_id == patient_id
     ).order_by(MedicalDocument.uploaded_at.desc()).all()
@@ -142,8 +207,10 @@ def get_patient_detail(
         docs_data.append({
             "id": doc.id,
             "filename": doc.original_filename,
+            "stored_filename": doc.filename,
             "file_type": doc.file_type,
             "category": doc.category,
+            "file_url": f"/uploads/{doc.filename}",
             "uploaded_at": doc.uploaded_at.isoformat() if doc.uploaded_at else None,
             "extracted_data": extracted.extracted_json if extracted else None,
             "ocr_text": extracted.raw_text if extracted else None,
@@ -195,10 +262,20 @@ def approve_summary(
         session = db.query(IntakeSession).filter(IntakeSession.id == summary.session_id).first()
         if session:
             session.status = "approved"
+            # Sync any remaining draft sessions for this patient
+            stale_sessions = db.query(IntakeSession).filter(
+                IntakeSession.patient_id == session.patient_id,
+                IntakeSession.id != session.id,
+                IntakeSession.status == "in_progress"
+            ).all()
+            for os in stale_sessions:
+                os.status = "approved"
 
     if req.edits and summary.summary_json:
         # Merge doctor edits into summary
+        from sqlalchemy.orm.attributes import flag_modified
         summary.summary_json = {**summary.summary_json, **req.edits}
+        flag_modified(summary, "summary_json")
         from services.summary_service import _json_to_text
         summary.summary_text = _json_to_text(summary.summary_json)
 
@@ -235,3 +312,21 @@ def get_session_summary(
         "approved_at": summary.approved_at.isoformat() if summary.approved_at else None,
         "created_at": summary.created_at.isoformat() if summary.created_at else None,
     }
+
+
+@router.get("/assigned/{session_id}")
+def get_assigned_doctor(
+    session_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get the assigned doctor for a session. Accessible by the patient or any doctor."""
+    session = db.query(IntakeSession).filter(IntakeSession.id == session_id).first()
+    if not session:
+        raise HTTPException(404, "Session not found")
+
+    if not session.assigned_doctor_id:
+        return {"assigned_doctor": None, "message": "No doctor assigned yet"}
+
+    doctor_info = get_doctor_profile_for_patient(db, session.assigned_doctor_id)
+    return {"assigned_doctor": doctor_info}

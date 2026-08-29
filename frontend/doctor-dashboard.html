@@ -59,11 +59,12 @@
 
             <!-- Filter Bar -->
             <div class="filter-bar">
-                <input type="text" class="search-input" placeholder="🔍 Search by patient name or complaint..." id="search-input" oninput="filterQueue()">
+                <input type="text" class="search-input" placeholder=" Search by patient name or complaint..." id="search-input" oninput="filterQueue()">
                 <button class="filter-btn active" data-filter="all" onclick="setFilter('all', this)">All</button>
-                <button class="filter-btn" data-filter="HIGH" onclick="setFilter('HIGH', this)">🔴 High</button>
-                <button class="filter-btn" data-filter="MEDIUM" onclick="setFilter('MEDIUM', this)">🟡 Medium</button>
-                <button class="filter-btn" data-filter="completed" onclick="setFilter('completed', this)">Completed</button>
+                <button class="filter-btn" data-filter="HIGH" onclick="setFilter('HIGH', this)"> High Priority</button>
+                <button class="filter-btn" data-filter="pending" onclick="setFilter('pending', this)">Pending Review</button>
+                <button class="filter-btn" data-filter="approved" onclick="setFilter('approved', this)">Approved</button>
+                <button class="filter-btn" data-filter="in_progress" onclick="setFilter('in_progress', this)">In Progress</button>
             </div>
 
             <!-- Queue Table -->
@@ -122,9 +123,9 @@
                 document.getElementById('stat-total').textContent = allPatients.length;
                 document.getElementById('stat-high').textContent = allPatients.filter(p => p.priority === 'HIGH').length;
                 document.getElementById('stat-pending').textContent = allPatients.filter(p => p.status === 'completed' && p.summary_status !== 'approved').length;
-                document.getElementById('stat-approved').textContent = allPatients.filter(p => p.summary_status === 'approved').length;
+                document.getElementById('stat-approved').textContent = allPatients.filter(p => p.status === 'approved' || p.summary_status === 'approved').length;
 
-                renderQueue(allPatients);
+                filterQueue();
             } catch (err) {
                 toast.error('Failed to load patient queue: ' + err.message);
             }
@@ -173,6 +174,12 @@
 
             if (currentFilter === 'HIGH' || currentFilter === 'MEDIUM') {
                 filtered = filtered.filter(p => p.priority === currentFilter);
+            } else if (currentFilter === 'pending') {
+                filtered = filtered.filter(p => p.status === 'completed' && p.summary_status !== 'approved');
+            } else if (currentFilter === 'approved') {
+                filtered = filtered.filter(p => p.status === 'approved' || p.summary_status === 'approved');
+            } else if (currentFilter === 'in_progress') {
+                filtered = filtered.filter(p => p.status === 'in_progress');
             } else if (currentFilter === 'completed') {
                 filtered = filtered.filter(p => p.status === 'completed');
             }

@@ -14,35 +14,74 @@ from models.user import User
 from config import JWT_SECRET, JWT_ALGORITHM, JWT_EXPIRY_HOURS
 
 
-pwd_context = CryptContext(schemes=["bcrypt", "pbkdf2_sha256"], deprecated="auto")
+try:
+    import bcrypt
+    HAS_BCRYPT = True
+except ImportError:
+    HAS_BCRYPT = False
+
 security = HTTPBearer()
 
 
 def hash_password(password: str) -> str:
     """Hash a password safely using bcrypt or pbkdf2_sha256."""
-    try:
-        return pwd_context.hash(password)
-    except Exception:
-        import hashlib, binascii, os
-        salt = hashlib.sha256(os.urandom(16)).hexdigest().encode('ascii')
-        pwdhash = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt, 100000)
-        pwdhash = binascii.hexlify(pwdhash)
-        return (salt + pwdhash).decode('ascii')
+    if HAS_BCRYPT:
+        try:
+            salt = bcrypt.gensalt()
+            return bcrypt.hashpw(password.encode("utf-8"), salt).decode("utf-8")
+        except Exception:
+            pass
+
+    # Fallback to PBKDF2-HMAC-SHA256
+    salt = hashlib.sha256(os.urandom(16)).hexdigest()
+    pwdhash = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("ascii"), 100000)
+    return f"pbkdf2_sha256${salt}${binascii.hexlify(pwdhash).decode('ascii')}"
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify a plain password against a hash."""
+    if not hashed_password or not plain_password:
+        return False
+
+    # Check bcrypt hash format
+    if hashed_password.startswith(("$2a$", "$2b$", "$2y$")):
+        if HAS_BCRYPT:
+            try:
+                return bcrypt.checkpw(plain_password.encode("utf-8"), hashed_password.encode("utf-8"))
+            except Exception:
+                pass
+        try:
+            return pwd_context.verify(plain_password, hashed_password)
+        except Exception:
+            return False
+
+    # Check custom PBKDF2 format
+    if hashed_password.startswith("pbkdf2_sha256$"):
+        try:
+            parts = hashed_password.split("$")
+            if len(parts) == 3:
+                salt = parts[1]
+                stored_hash = parts[2]
+                pwdhash = hashlib.pbkdf2_hmac("sha256", plain_password.encode("utf-8"), salt.encode("ascii"), 100000)
+                return binascii.hexlify(pwdhash).decode("ascii") == stored_hash
+        except Exception:
+            return False
+
+    # Check raw salt+hash fallback
+    if len(hashed_password) > 64:
+        try:
+            salt = hashed_password[:64]
+            stored_pwd = hashed_password[64:]
+            pwdhash = hashlib.pbkdf2_hmac("sha256", plain_password.encode("utf-8"), salt.encode("ascii"), 100000)
+            if binascii.hexlify(pwdhash).decode("ascii") == stored_pwd:
+                return True
+        except Exception:
+            pass
+
     try:
         return pwd_context.verify(plain_password, hashed_password)
     except Exception:
-        try:
-            salt = hashed_password[:64].encode('ascii')
-            stored_password = hashed_password[64:]
-            pwdhash = hashlib.pbkdf2_hmac('sha256', plain_password.encode('utf-8'), salt, 100000)
-            pwdhash = binascii.hexlify(pwdhash).decode('ascii')
-            return pwdhash == stored_password
-        except Exception:
-            return False
+        return False
 
 
 def create_access_token(user_id: str, role: str, name: str) -> str:
