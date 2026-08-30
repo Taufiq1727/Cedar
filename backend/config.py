@@ -6,7 +6,7 @@ load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env'))
 
 # Database
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./medikiosk.db")
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./clinassistai.db")
 
 # Normalize SQLite URL to absolute path inside backend directory if relative
 if DATABASE_URL.startswith("sqlite:///./") or DATABASE_URL.startswith("sqlite:////."):

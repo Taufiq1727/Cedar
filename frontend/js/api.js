@@ -1,5 +1,5 @@
 /**
- * MediKiosk API Client - handles all backend communication.
+ * ClinAssistAI API Client - handles all backend communication.
  */
 const API_BASE = (window.location.port === '8000') ? '' : 'http://127.0.0.1:8000';
 
@@ -9,26 +9,30 @@ class ApiClient {
     }
 
     getToken() {
-        return localStorage.getItem('medikiosk_token');
+        return localStorage.getItem('clinassistai_token') || localStorage.getItem('medikiosk_token');
     }
 
     setAuth(data) {
-        localStorage.setItem('medikiosk_token', data.access_token);
-        localStorage.setItem('medikiosk_role', data.role);
-        localStorage.setItem('medikiosk_name', data.name);
-        localStorage.setItem('medikiosk_user_id', data.user_id);
+        localStorage.setItem('clinassistai_token', data.access_token);
+        localStorage.setItem('clinassistai_role', data.role);
+        localStorage.setItem('clinassistai_name', data.name);
+        localStorage.setItem('clinassistai_user_id', data.user_id);
     }
 
     clearAuth() {
+        localStorage.removeItem('clinassistai_token');
+        localStorage.removeItem('clinassistai_role');
+        localStorage.removeItem('clinassistai_name');
+        localStorage.removeItem('clinassistai_user_id');
         localStorage.removeItem('medikiosk_token');
         localStorage.removeItem('medikiosk_role');
         localStorage.removeItem('medikiosk_name');
         localStorage.removeItem('medikiosk_user_id');
     }
 
-    getRole() { return localStorage.getItem('medikiosk_role'); }
-    getName() { return localStorage.getItem('medikiosk_name'); }
-    getUserId() { return localStorage.getItem('medikiosk_user_id'); }
+    getRole() { return localStorage.getItem('clinassistai_role') || localStorage.getItem('medikiosk_role'); }
+    getName() { return localStorage.getItem('clinassistai_name') || localStorage.getItem('medikiosk_name'); }
+    getUserId() { return localStorage.getItem('clinassistai_user_id') || localStorage.getItem('medikiosk_user_id'); }
     isLoggedIn() { return !!this.getToken(); }
 
     async request(path, options = {}) {

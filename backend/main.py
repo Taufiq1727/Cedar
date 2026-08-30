@@ -1,4 +1,4 @@
-"""MediKiosk Backend - FastAPI Application Entry Point."""
+"""ClinAssistAI Backend - FastAPI Application Entry Point."""
 import os
 import sys
 import logging
@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 
 # Create FastAPI app
 app = FastAPI(
-    title="MediKiosk API",
+    title="ClinAssistAI API",
     description="AI-Powered Patient Case-Taking and Clinical History Software",
     version="1.0.0",
     docs_url="/docs",
@@ -72,7 +72,7 @@ def startup():
         logger.info("Doctor accounts verified.")
     except Exception as e:
         logger.warning(f"Doctor seeding check: {e}")
-    logger.info("MediKiosk API started successfully.")
+    logger.info("ClinAssistAI API started successfully.")
 
 
 @app.get("/api/health", tags=["Health"])
@@ -80,7 +80,7 @@ def health_check():
     """Health check endpoint."""
     return {
         "status": "healthy",
-        "service": "MediKiosk API",
+        "service": "ClinAssistAI API",
         "version": "1.0.0",
     }
 

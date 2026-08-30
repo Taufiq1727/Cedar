@@ -21,7 +21,7 @@ try:
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 except Exception as e:
     logger.warning(f"Could not connect to configured DB ({DATABASE_URL}): {e}. Falling back to SQLite.")
-    DATABASE_URL = "sqlite:///./medikiosk.db"
+    DATABASE_URL = "sqlite:///./clinassistai.db"
     engine = _get_engine(DATABASE_URL)
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
@@ -70,7 +70,7 @@ def create_tables():
         logger.warning(f"Database error during table creation: {e}. Falling back to local SQLite database.")
         from config import BASE_DIR
         import os
-        sqlite_path = os.path.join(BASE_DIR, "medikiosk.db").replace(os.sep, "/")
+        sqlite_path = os.path.join(BASE_DIR, "clinassistai.db").replace(os.sep, "/")
         sqlite_url = f"sqlite:///{sqlite_path}"
         engine = _get_engine(sqlite_url)
         SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

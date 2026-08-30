@@ -13,7 +13,7 @@ def generate_fhir_patient(patient_data: dict, user_data: dict) -> dict:
         },
         "identifier": [
             {
-                "system": "urn:medikiosk:patient",
+                "system": "urn:clinassistai:patient",
                 "value": patient_data.get("id"),
             }
         ],
