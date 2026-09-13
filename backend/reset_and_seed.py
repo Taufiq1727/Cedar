@@ -270,7 +270,25 @@ def reset_and_seed_all():
     now = datetime.now(timezone.utc)
 
     try:
-        # 1. Seed Specialist Doctors
+        # 1. Seed Clinical Assistants / Triage Nurses
+        from seed_doctors import NURSES
+        nurse_id_map = {}
+        for nurse_data in NURSES:
+            user = User(
+                email=nurse_data["email"],
+                password_hash=hash_password(nurse_data["password"]),
+                role="assistant",
+                name=nurse_data["name"],
+                phone=nurse_data["phone"]
+            )
+            db.add(user)
+            db.flush()
+            nurse_id_map[nurse_data["name"]] = user.id
+            print(f"  + Nurse/Assistant Seeded: {nurse_data['name']} ({nurse_data['email']})")
+
+        lead_nurse_id = nurse_id_map.get("Nurse Sunita Verma")
+
+        # 2. Seed Specialist Doctors
         doctor_spec_map = {}
         for doc_data in DOCTORS:
             user = User(
@@ -298,7 +316,7 @@ def reset_and_seed_all():
             doctor_spec_map[doc_data["specialization"]] = doctor.id
             print(f"  + Doctor Seeded: {doc_data['name']} ({doc_data['specialization']})")
 
-        # 2. Seed Demo Patients
+        # 3. Seed Demo Patients (Triage Handoff Cases)
         for pdata in DEMO_PATIENTS:
             u_info = pdata["user"]
             prof_info = pdata["profile"]
@@ -332,6 +350,20 @@ def reset_and_seed_all():
             session_created = now - timedelta(hours=ses_info["created_offset_hours"])
             session_completed = (now - timedelta(hours=ses_info["completed_offset_hours"])) if ses_info.get("completed_offset_hours") else None
 
+            # Sample vitals based on condition
+            has_high_flag = any(rf.get("severity") == "HIGH" for rf in pdata.get("red_flags", []))
+            triage_lvl = "EMERGENCY" if has_high_flag else ("URGENT" if pdata.get("red_flags") else "ROUTINE")
+
+            vitals_sample = {
+                "bp": "148/92" if has_high_flag else "122/80",
+                "pulse": "96" if has_high_flag else "74",
+                "spo2": "94" if has_high_flag else "98",
+                "temp": "100.8" if "fever" in ses_info["pathway"] else "98.4",
+                "rbs": "164" if prof_info["age"] > 50 else "110",
+            }
+
+            nurse_note_sample = f"Patient interviewed at Triage Desk 1. Vitals recorded. Symptoms dictated and AI-parsed. Dispatched to Dr. {ses_info['doctor_spec']}."
+
             session = IntakeSession(
                 patient_id=patient.id,
                 language=ses_info["language"],
@@ -340,6 +372,11 @@ def reset_and_seed_all():
                 pathway=ses_info["pathway"],
                 progress_pct=ses_info["progress_pct"],
                 assigned_doctor_id=assigned_doc_id,
+                assistant_id=lead_nurse_id,
+                triage_level=triage_lvl,
+                vitals=vitals_sample,
+                nurse_notes=nurse_note_sample,
+                intake_source="assistant_triage",
                 created_at=session_created,
                 completed_at=session_completed
             )

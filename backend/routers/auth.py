@@ -18,8 +18,11 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 def register(req: RegisterRequest, db: Session = Depends(get_db)):
     """Register a new patient or doctor."""
     # Validate role
-    if req.role not in ("patient", "doctor"):
-        raise HTTPException(400, "Role must be 'patient' or 'doctor'")
+    role = req.role.lower()
+    if role == "nurse":
+        role = "assistant"
+    if role not in ("patient", "doctor", "assistant"):
+        raise HTTPException(400, "Role must be 'assistant', 'doctor', or 'patient'")
 
     # Check duplicate email
     existing = db.query(User).filter(User.email == req.email).first()
@@ -34,7 +37,7 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
     user = User(
         email=req.email,
         password_hash=hash_password(req.password),
-        role=req.role,
+        role=role,
         name=req.name,
         phone=req.phone,
     )
@@ -42,7 +45,7 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
     db.flush()
 
     # Create role-specific profile
-    if req.role == "patient":
+    if role == "patient":
         patient = Patient(
             user_id=user.id,
             age=req.age,
@@ -50,12 +53,13 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
             blood_group=req.blood_group,
         )
         db.add(patient)
-    elif req.role == "doctor":
+    elif role == "doctor":
         doctor = Doctor(
             user_id=user.id,
             hospital=req.hospital,
             professional_id=req.professional_id,
             specialization=req.specialization,
+            department=req.department or req.specialization,
         )
         db.add(doctor)
 

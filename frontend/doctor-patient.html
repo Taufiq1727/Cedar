@@ -182,10 +182,33 @@
             // Overview
             const latestSession = sessions[0];
             if (latestSession) {
+                const vitals = latestSession.vitals || {};
+                const vitalsDisplay = Object.keys(vitals).length > 0 ? `
+                    <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(110px, 1fr));gap:8px;margin-top:12px;padding:12px;background:var(--gray-50);border-radius:var(--radius-md);border:1px solid var(--gray-200)">
+                        <div style="text-align:center"><div style="font-size:0.7rem;color:var(--gray-500);font-weight:700">BLOOD PRESSURE</div><div style="font-weight:700;font-size:1.1rem;color:var(--gray-900)">${vitals.bp || '—'}</div><div style="font-size:0.65rem;color:var(--gray-400)">mmHg</div></div>
+                        <div style="text-align:center"><div style="font-size:0.7rem;color:var(--gray-500);font-weight:700">HEART RATE</div><div style="font-weight:700;font-size:1.1rem;color:var(--gray-900)">${vitals.pulse || '—'}</div><div style="font-size:0.65rem;color:var(--gray-400)">bpm</div></div>
+                        <div style="text-align:center"><div style="font-size:0.7rem;color:var(--gray-500);font-weight:700">SPO2 OXYGEN</div><div style="font-weight:700;font-size:1.1rem;color:${vitals.spo2 && parseFloat(vitals.spo2) < 92 ? 'var(--danger)' : 'var(--gray-900)'}">${vitals.spo2 ? vitals.spo2 + '%' : '—'}</div><div style="font-size:0.65rem;color:var(--gray-400)">%</div></div>
+                        <div style="text-align:center"><div style="font-size:0.7rem;color:var(--gray-500);font-weight:700">TEMPERATURE</div><div style="font-weight:700;font-size:1.1rem;color:var(--gray-900)">${vitals.temp || '—'}</div><div style="font-size:0.65rem;color:var(--gray-400)">°F</div></div>
+                        <div style="text-align:center"><div style="font-size:0.7rem;color:var(--gray-500);font-weight:700">BLOOD SUGAR</div><div style="font-weight:700;font-size:1.1rem;color:var(--gray-900)">${vitals.rbs || '—'}</div><div style="font-size:0.65rem;color:var(--gray-400)">mg/dL</div></div>
+                    </div>
+                ` : '';
+
+                const triageBadge = latestSession.triage_level === 'EMERGENCY'
+                    ? '<span style="padding:4px 10px;border-radius:12px;background:#fee2e2;color:#b91c1c;font-weight:700;font-size:0.8rem">🔴 EMERGENCY</span>'
+                    : (latestSession.triage_level === 'URGENT'
+                        ? '<span style="padding:4px 10px;border-radius:12px;background:#fef3c7;color:#b45309;font-weight:700;font-size:0.8rem">🟡 URGENT</span>'
+                        : '<span style="padding:4px 10px;border-radius:12px;background:#dcfce7;color:#15803d;font-weight:700;font-size:0.8rem">🟢 ROUTINE</span>');
+
                 document.getElementById('overview-complaint').innerHTML = `
-                    <div style="font-size:1.25rem;font-weight:700;margin-bottom:var(--space-2)">${escapeHtml(latestSession.chief_complaint || 'Not recorded')}</div>
-                    <p class="text-muted">Pathway: ${latestSession.pathway || 'General'} • Progress: ${latestSession.progress_pct}%</p>
-                    <div class="progress-bar" style="margin-top:var(--space-3)"><div class="progress-fill" style="width:${latestSession.progress_pct}%"></div></div>
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+                        <div style="font-size:1.25rem;font-weight:700">${escapeHtml(latestSession.chief_complaint || 'Not recorded')}</div>
+                        <div>${triageBadge}</div>
+                    </div>
+                    <div style="font-size:0.82rem;color:var(--primary-700);background:var(--primary-50);padding:6px 10px;border-radius:var(--radius-sm);margin-bottom:10px">
+                        👩‍⚕️ <strong>Intake Triage Conducted By:</strong> ${latestSession.assistant_name || 'OPD Triage Nurse'}
+                        ${latestSession.nurse_notes ? `<div style="margin-top:4px;color:var(--gray-700)"><strong>Nurse Notes:</strong> "${escapeHtml(latestSession.nurse_notes)}"</div>` : ''}
+                    </div>
+                    ${vitalsDisplay}
                 `;
 
                 // Red flags overview
@@ -201,9 +224,9 @@
 
                 // Overview stats
                 document.getElementById('overview-stats').innerHTML = `
-                    <div class="quick-stat"><div class="label">Sessions</div><div class="value">${sessions.length}</div></div>
-                    <div class="quick-stat"><div class="label">Documents</div><div class="value">${docs.length}</div></div>
+                    <div class="quick-stat"><div class="label">Triage Priority</div><div class="value text-sm">${latestSession.triage_level || 'ROUTINE'}</div></div>
                     <div class="quick-stat"><div class="label">Red Flags</div><div class="value" style="color:${allFlags.length > 0 ? 'var(--danger)' : 'var(--gray-800)'}">${allFlags.length}</div></div>
+                    <div class="quick-stat"><div class="label">Documents</div><div class="value">${docs.length}</div></div>
                     <div class="quick-stat"><div class="label">Status</div><div class="value text-sm">${latestSession.status}</div></div>
                 `;
             }

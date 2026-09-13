@@ -23,6 +23,7 @@ from routers.intake import router as intake_router
 from routers.documents import router as documents_router
 from routers.ai import router as ai_router
 from routers.doctor import router as doctor_router
+from routers.assistant import router as assistant_router
 
 # Configure logging
 logging.basicConfig(
@@ -54,6 +55,7 @@ app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 # Register routers
 app.include_router(auth_router)
+app.include_router(assistant_router)
 app.include_router(patient_router)
 app.include_router(intake_router)
 app.include_router(documents_router)

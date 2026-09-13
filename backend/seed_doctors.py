@@ -92,8 +92,33 @@ DOCTORS = [
 ]
 
 
+NURSES = [
+    {
+        "name": "Nurse Sunita Verma",
+        "email": "nurse.sunita@clinassistai.com",
+        "password": "Nurse@123",
+        "phone": "+91-9876500001",
+        "role": "assistant",
+    },
+    {
+        "name": "Nurse Priya Sharma",
+        "email": "nurse.priya@clinassistai.com",
+        "password": "Nurse@123",
+        "phone": "+91-9876500002",
+        "role": "assistant",
+    },
+    {
+        "name": "Nurse Rajesh Kumar",
+        "email": "nurse.rajesh@clinassistai.com",
+        "password": "Nurse@123",
+        "phone": "+91-9876500003",
+        "role": "assistant",
+    },
+]
+
+
 def seed_doctors():
-    """Create all doctor accounts if they don't already exist."""
+    """Create all doctor and clinical assistant accounts if they don't already exist."""
     create_tables()
     db = SessionLocal()
 
@@ -101,6 +126,23 @@ def seed_doctors():
     skipped = 0
 
     try:
+        # Seed Nurses / Assistants
+        for nurse_data in NURSES:
+            existing = db.query(User).filter(User.email == nurse_data["email"]).first()
+            if existing:
+                skipped += 1
+                continue
+            user = User(
+                email=nurse_data["email"],
+                password_hash=hash_password(nurse_data["password"]),
+                role="assistant",
+                name=nurse_data["name"],
+                phone=nurse_data["phone"],
+            )
+            db.add(user)
+            created += 1
+
+        # Seed Doctors
         for doc_data in DOCTORS:
             # Check if already exists
             existing = db.query(User).filter(User.email == doc_data["email"]).first()

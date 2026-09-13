@@ -77,3 +77,29 @@ def get_fhir_bundle(
 
     bundle = generate_fhir_bundle(patient_data, user_data)
     return bundle
+
+
+from pydantic import BaseModel
+
+class GeminiKeyRequest(BaseModel):
+    api_key: str
+
+@router.post("/configure-key")
+def configure_gemini_key(req: GeminiKeyRequest):
+    """Dynamically set the Gemini API Key."""
+    import os
+    import google.generativeai as genai
+    import services.ai_service as ais
+
+    key = req.api_key.strip()
+    if not key:
+        raise HTTPException(400, "API key cannot be empty")
+
+    os.environ["GEMINI_API_KEY"] = key
+    ais.GEMINI_API_KEY = key
+    try:
+        genai.configure(api_key=key)
+        return {"status": "configured", "has_gemini": True, "message": "Gemini API key linked successfully!"}
+    except Exception as e:
+        raise HTTPException(400, f"Failed to configure Gemini: {e}")
+

@@ -1,0 +1,1011 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clinical Assistant & Nurse Triage Desk — ClinAssistAI</title>
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/dashboard.css">
+    <link rel="stylesheet" href="css/doctor.css">
+    <style>
+        .triage-grid {
+            display: grid;
+            grid-template-columns: 1.15fr 0.85fr;
+            gap: var(--space-6);
+            margin-top: var(--space-4);
+        }
+        @media (max-width: 1100px) {
+            .triage-grid { grid-template-columns: 1fr; }
+        }
+        .desk-card {
+            background: white;
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--gray-200);
+            box-shadow: var(--shadow-sm);
+            padding: var(--space-5);
+            margin-bottom: var(--space-5);
+        }
+        .desk-card-title {
+            font-size: 1.05rem;
+            font-weight: 700;
+            color: var(--gray-900);
+            margin-bottom: var(--space-4);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .vitals-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+            gap: var(--space-3);
+        }
+        .vital-box {
+            background: var(--gray-50);
+            border: 1px solid var(--gray-200);
+            border-radius: var(--radius-md);
+            padding: var(--space-3);
+            text-align: center;
+            transition: all 0.2s;
+        }
+        .vital-box:focus-within {
+            border-color: var(--primary-500);
+            background: white;
+            box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.15);
+        }
+        .vital-label {
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            font-weight: 700;
+            color: var(--gray-500);
+            letter-spacing: 0.5px;
+        }
+        .vital-input {
+            width: 100%;
+            border: none;
+            background: transparent;
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: var(--gray-900);
+            text-align: center;
+            outline: none;
+            padding: 2px 0;
+        }
+        .vital-unit {
+            font-size: 0.7rem;
+            color: var(--gray-400);
+        }
+        .voice-section {
+            background: linear-gradient(135deg, rgba(14, 165, 233, 0.05), rgba(99, 102, 241, 0.05));
+            border: 1px dashed var(--primary-300);
+            border-radius: var(--radius-md);
+            padding: var(--space-4);
+            margin-bottom: var(--space-4);
+        }
+        .voice-controls {
+            display: flex;
+            align-items: center;
+            gap: var(--space-3);
+            margin-bottom: var(--space-3);
+            flex-wrap: wrap;
+        }
+        .mic-record-btn {
+            background: var(--primary-600);
+            color: white;
+            border: none;
+            border-radius: var(--radius-full);
+            padding: 8px 18px;
+            font-weight: 600;
+            font-size: 0.875rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .mic-record-btn.recording {
+            background: #ef4444;
+            animation: pulse-red 1.5s infinite;
+        }
+        @keyframes pulse-red {
+            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.6); }
+            70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+        .lang-select {
+            padding: 6px 12px;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--gray-300);
+            font-size: 0.85rem;
+            background: white;
+        }
+        .quick-tags {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            margin-top: 8px;
+        }
+        .quick-tag {
+            background: white;
+            border: 1px solid var(--gray-300);
+            border-radius: var(--radius-full);
+            padding: 3px 10px;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.15s;
+            color: var(--gray-700);
+        }
+        .quick-tag:hover {
+            border-color: var(--primary-500);
+            color: var(--primary-600);
+            background: var(--primary-50);
+        }
+        .triage-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 12px;
+            border-radius: var(--radius-full);
+            font-size: 0.8rem;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+        .triage-emergency { background: #fee2e2; color: #b91c1c; border: 1px solid #f87171; }
+        .triage-urgent { background: #fef3c7; color: #b45309; border: 1px solid #fcd34d; }
+        .triage-routine { background: #dcfce7; color: #15803d; border: 1px solid #86efac; }
+        .alert-card {
+            border-left: 4px solid #ef4444;
+            background: #fff5f5;
+            padding: 10px 14px;
+            border-radius: 4px;
+            margin-bottom: 8px;
+            font-size: 0.85rem;
+        }
+        .doctor-card-select {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border: 1.5px solid var(--gray-200);
+            padding: 10px 14px;
+            border-radius: var(--radius-md);
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .doctor-card-select:hover {
+            border-color: var(--primary-400);
+            background: var(--primary-50);
+        }
+        .doctor-card-select.selected {
+            border-color: var(--primary-600);
+            background: rgba(14, 165, 233, 0.08);
+        }
+        .tab-btn {
+            padding: 8px 16px;
+            border: none;
+            background: none;
+            font-weight: 600;
+            color: var(--gray-500);
+            border-bottom: 2px solid transparent;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+        .tab-btn.active {
+            color: var(--primary-600);
+            border-bottom-color: var(--primary-600);
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-layout">
+        <!-- Top Header -->
+        <header class="dash-header">
+            <div class="dash-header-left">
+                <a href="/" class="dash-brand"><div class="icon">🏥</div> ClinAssistAI</a>
+                <nav class="dash-nav">
+                    <button class="tab-btn active" id="nav-desk-btn" onclick="switchMainTab('desk')">🩺 Triage & Intake Desk</button>
+                    <button class="tab-btn" id="nav-queue-btn" onclick="switchMainTab('queue')">📋 Today's Triage Log</button>
+                </nav>
+            </div>
+            <div class="dash-header-right">
+                <button class="btn btn-ghost btn-sm" onclick="toggleApiKeyModal(true)" style="border:1px solid var(--primary-200);background:var(--primary-50);color:var(--primary-700);display:flex;align-items:center;gap:6px">
+                    <span>✨ AI Engine Active</span>
+                    <span style="font-size:0.75rem;padding:1px 6px;border-radius:10px;background:var(--primary-600);color:white">NLP / Gemini</span>
+                </button>
+                <div class="dash-user">
+                    <div>
+                        <div class="dash-user-name" id="user-name">Clinical Assistant</div>
+                        <div class="dash-user-role" id="user-role-label">Nurse Triage Operator</div>
+                    </div>
+                    <div class="dash-user-avatar" id="user-avatar" style="background:#0284c7;color:white">👩‍⚕️</div>
+                </div>
+                <button class="btn btn-ghost btn-sm" onclick="logout()">Logout</button>
+            </div>
+        </header>
+
+        <!-- Main Container -->
+        <main class="dash-content-wide" style="padding-top:var(--space-4)">
+            <!-- Header Stats -->
+            <div class="quick-stats" style="margin-bottom:var(--space-4)">
+                <div class="quick-stat">
+                    <div class="label">Triaged Today</div>
+                    <div class="value" id="stat-total" style="color:var(--primary-600)">0</div>
+                </div>
+                <div class="quick-stat">
+                    <div class="label">🔴 Emergency Alerts</div>
+                    <div class="value" id="stat-emergency" style="color:var(--danger)">0</div>
+                </div>
+                <div class="quick-stat">
+                    <div class="label">🟡 Urgent Triages</div>
+                    <div class="value" id="stat-urgent" style="color:var(--warning)">0</div>
+                </div>
+                <div class="quick-stat">
+                    <div class="label">👨‍⚕️ Dispatched to Doctors</div>
+                    <div class="value" id="stat-dispatched" style="color:var(--success)">0</div>
+                </div>
+            </div>
+
+            <!-- TAB 1: TRIAGE & INTAKE DESK -->
+            <div id="tab-desk" class="tab-content">
+                <div class="triage-grid">
+                    <!-- LEFT COLUMN: Patient Entry & Symptom Intake -->
+                    <div>
+                        <!-- 1. Patient Identification & Details -->
+                        <div class="desk-card">
+                            <div class="desk-card-title">
+                                <span>1. Patient Identification</span>
+                                <span style="font-size:0.75rem;color:var(--primary-600);font-weight:600">Search existing or enter new patient</span>
+                            </div>
+
+                            <!-- Search bar with suggestions -->
+                            <div style="position:relative;margin-bottom:var(--space-3)">
+                                <input type="text" class="form-input" id="patient-search-input" placeholder="🔍 Search existing patient by Name, Phone, or MRN..." oninput="debouncePatientSearch()">
+                                <div id="patient-search-dropdown" style="display:none;position:absolute;left:0;right:0;top:100%;background:white;border:1px solid var(--gray-300);border-radius:var(--radius-md);box-shadow:var(--shadow-lg);z-index:40;max-height:220px;overflow-y:auto"></div>
+                            </div>
+
+                            <!-- Patient Input Fields -->
+                            <div style="background:var(--gray-50);padding:14px;border-radius:var(--radius-md);border:1px solid var(--gray-200)">
+                                <div class="form-row" style="margin-bottom:10px">
+                                    <div class="form-group" style="flex:2">
+                                        <label class="form-label">Patient Full Name *</label>
+                                        <input type="text" class="form-input" id="pat-name-input" placeholder="e.g. Ramesh Patel / Anand Sharma">
+                                    </div>
+                                    <div class="form-group" style="flex:1">
+                                        <label class="form-label">Age</label>
+                                        <input type="number" class="form-input" id="pat-age-input" placeholder="e.g. 45" min="1" max="120">
+                                    </div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label class="form-label">Gender</label>
+                                        <select class="form-select" id="pat-gender-input">
+                                            <option value="Male">Male</option>
+                                            <option value="Female">Female</option>
+                                            <option value="Other">Other</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">Phone Number</label>
+                                        <input type="tel" class="form-input" id="pat-phone-input" placeholder="+91-9876543210">
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">Blood Group</label>
+                                        <select class="form-select" id="pat-blood-input">
+                                            <option value="">Unknown</option>
+                                            <option value="A+">A+</option><option value="A-">A-</option>
+                                            <option value="B+">B+</option><option value="B-">B-</option>
+                                            <option value="O+">O+</option><option value="O-">O-</option>
+                                            <option value="AB+">AB+</option><option value="AB-">AB-</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 2. Vitals Desk -->
+                        <div class="desk-card">
+                            <div class="desk-card-title">
+                                <span>2. Patient Vital Signs</span>
+                                <span style="font-size:0.75rem;color:var(--gray-500);font-weight:normal">Live abnormal range detector active</span>
+                            </div>
+                            <div class="vitals-grid">
+                                <div class="vital-box">
+                                    <div class="vital-label">Blood Pressure</div>
+                                    <input type="text" class="vital-input" id="vital-bp" placeholder="120/80" oninput="checkVitalsAlerts()">
+                                    <div class="vital-unit">mmHg</div>
+                                </div>
+                                <div class="vital-box">
+                                    <div class="vital-label">Pulse / HR</div>
+                                    <input type="number" class="vital-input" id="vital-pulse" placeholder="72" oninput="checkVitalsAlerts()">
+                                    <div class="vital-unit">bpm</div>
+                                </div>
+                                <div class="vital-box">
+                                    <div class="vital-label">SpO2 Oxygen</div>
+                                    <input type="number" class="vital-input" id="vital-spo2" placeholder="98" oninput="checkVitalsAlerts()">
+                                    <div class="vital-unit">%</div>
+                                </div>
+                                <div class="vital-box">
+                                    <div class="vital-label">Temperature</div>
+                                    <input type="number" step="0.1" class="vital-input" id="vital-temp" placeholder="98.6" oninput="checkVitalsAlerts()">
+                                    <div class="vital-unit">°F</div>
+                                </div>
+                                <div class="vital-box">
+                                    <div class="vital-label">Blood Sugar (RBS)</div>
+                                    <input type="number" class="vital-input" id="vital-rbs" placeholder="110">
+                                    <div class="vital-unit">mg/dL</div>
+                                </div>
+                            </div>
+                            <div id="vitals-warning-banner" style="display:none;margin-top:10px;padding:8px 12px;border-radius:var(--radius-sm);background:#fff1f2;border:1px solid #fecdd3;color:#e11d48;font-size:0.82rem;font-weight:600"></div>
+                        </div>
+
+                        <!-- 3. Assistant Voice & Text Symptom Entry -->
+                        <div class="desk-card">
+                            <div class="desk-card-title">
+                                <span>3. Symptom Dictation & Clinical Notes</span>
+                                <span style="font-size:0.75rem;color:var(--primary-600);font-weight:600">Assistant Scribe Active</span>
+                            </div>
+
+                            <!-- Voice Input Box -->
+                            <div class="voice-section">
+                                <div class="voice-controls">
+                                    <button type="button" class="mic-record-btn" id="voice-record-btn" onclick="toggleVoiceDictation()">
+                                        <span id="voice-icon">🎤</span>
+                                        <span id="voice-status-text">Dictate Symptoms</span>
+                                    </button>
+                                    <select class="lang-select" id="dictation-lang" onchange="changeVoiceLanguage(this.value)">
+                                        <option value="en">English (India)</option>
+                                        <option value="hi">Hindi (हिन्दी)</option>
+                                        <option value="kn">Kannada (ಕನ್ನಡ)</option>
+                                    </select>
+                                    <span id="live-audio-pulse" style="display:none;color:#ef4444;font-size:0.8rem;font-weight:700">● Listening...</span>
+                                </div>
+                                <div id="live-speech-box" style="font-size:0.85rem;color:var(--gray-600);font-style:italic;min-height:22px">
+                                    Press "Dictate Symptoms" or speak into microphone...
+                                </div>
+                            </div>
+
+                            <!-- Manual Typing / Detailed Clinical Notes -->
+                            <div class="form-group" style="margin-bottom:var(--space-3)">
+                                <label class="form-label" style="display:flex;justify-content:space-between">
+                                    <span>Triage Nurse Observations / Patient's Complaint:</span>
+                                    <span style="font-size:0.75rem;color:var(--gray-500)">Type or edit voice text</span>
+                                </label>
+                                <textarea class="form-input" id="nurse-notes-input" rows="4" placeholder="e.g. Patient reports retrosternal chest tightness for 4 days, radiating to left arm with breathlessness. Known hypertensive on Amlodipine. No fever."></textarea>
+                            </div>
+
+                            <!-- Smart Clinical Prompts -->
+                            <div>
+                                <div style="font-size:0.75rem;font-weight:700;color:var(--gray-500);text-transform:uppercase;margin-bottom:4px">Quick Clinical Prompts:</div>
+                                <div class="quick-tags">
+                                    <span class="quick-tag" onclick="appendPrompt('Chest tightness radiating to left shoulder and jaw.')">+ Chest Pain Radiation</span>
+                                    <span class="quick-tag" onclick="appendPrompt('High grade fever with chills and severe body ache.')">+ Fever & Chills</span>
+                                    <span class="quick-tag" onclick="appendPrompt('Shortness of breath on mild exertion, SpO2 dropping.')">+ Dyspnea on Exertion</span>
+                                    <span class="quick-tag" onclick="appendPrompt('Persistent headache with nausea and light sensitivity.')">+ Severe Headache</span>
+                                    <span class="quick-tag" onclick="appendPrompt('Acute abdominal pain in right lower quadrant with vomiting.')">+ Acute Abdomen</span>
+                                    <span class="quick-tag" onclick="appendPrompt('Known diabetic and hypertensive on regular treatment.')">+ Chronic HTN/DM</span>
+                                </div>
+                            </div>
+
+                            <div style="margin-top:var(--space-4);text-align:right">
+                                <button type="button" class="btn btn-primary" id="ai-extract-btn" onclick="runAIExtraction()">
+                                    ✨ Run AI Clinical Extraction & Triage
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- RIGHT COLUMN: AI Scribe, Triage Priority & Doctor Dispatch -->
+                    <div>
+                        <!-- AI Extracted Clinical Handoff -->
+                        <div class="desk-card" id="ai-results-card">
+                            <div class="desk-card-title">
+                                <span>4. AI Clinical Structure & Triage</span>
+                                <span class="triage-badge triage-routine" id="triage-urgency-badge">ROUTINE</span>
+                            </div>
+
+                            <!-- Red Flags Alert Box -->
+                            <div id="red-flags-container" style="display:none;margin-bottom:var(--space-3)"></div>
+
+                            <!-- Structured Fields -->
+                            <div class="form-group" style="margin-bottom:var(--space-3)">
+                                <label class="form-label">Standardized Chief Complaint</label>
+                                <input type="text" class="form-input" id="extracted-chief-complaint" placeholder="e.g. Exertional chest tightness & shortness of breath">
+                            </div>
+
+                            <div class="form-row" style="margin-bottom:var(--space-3)">
+                                <div class="form-group">
+                                    <label class="form-label">Clinical Pathway</label>
+                                    <select class="form-select" id="extracted-pathway">
+                                        <option value="chest_pain">Chest Pain / Cardiac</option>
+                                        <option value="fever">Fever & Infection</option>
+                                        <option value="headache">Headache / Neuro</option>
+                                        <option value="abdominal_pain">Abdominal Pain</option>
+                                        <option value="cough_breathing">Respiratory / Cough</option>
+                                        <option value="general">General Medicine</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Severity Rating (1-10)</label>
+                                    <input type="number" min="1" max="10" class="form-input" id="extracted-severity" value="5">
+                                </div>
+                            </div>
+
+                            <div class="form-group" style="margin-bottom:var(--space-3)">
+                                <label class="form-label">History of Present Illness (HPI Narrative)</label>
+                                <textarea class="form-input" id="extracted-hpi" rows="3" placeholder="AI structured narrative will appear here..."></textarea>
+                            </div>
+
+                            <div class="form-group" style="margin-bottom:var(--space-3)">
+                                <label class="form-label">Past History & Chronic Conditions</label>
+                                <input type="text" class="form-input" id="extracted-pmh" placeholder="e.g. Hypertension (6 yrs), Type 2 Diabetes">
+                            </div>
+
+                            <div class="form-group" style="margin-bottom:var(--space-3)">
+                                <label class="form-label">Known Drug Allergies</label>
+                                <input type="text" class="form-input" id="extracted-allergies" placeholder="e.g. No known drug allergies">
+                            </div>
+                        </div>
+
+                        <!-- 5. Dispatch to Specialist Doctor -->
+                        <div class="desk-card" style="border-top:4px solid var(--primary-600)">
+                            <div class="desk-card-title">
+                                <span>5. Assign Specialist Doctor & Save</span>
+                            </div>
+                            <p style="font-size:0.83rem;color:var(--gray-600);margin-bottom:var(--space-3)">
+                                Select attending physician. The doctor will instantly receive the patient case with vitals, red flags, and your clinical summary.
+                            </p>
+
+                            <div id="doctor-selection-list" style="max-height:220px;overflow-y:auto;margin-bottom:var(--space-4)">
+                                <div style="color:var(--gray-500);font-size:0.85rem">Loading available specialist doctors...</div>
+                            </div>
+
+                            <div style="display:grid;grid-template-columns:1fr;gap:8px">
+                                <button class="btn btn-primary btn-lg" style="width:100%;font-size:1.02rem;padding:12px" id="dispatch-case-btn" onclick="saveAndDispatchIntake(true)">
+                                    ⚡ Save & Dispatch to Doctor Queue
+                                </button>
+                                <button class="btn btn-secondary" style="width:100%;padding:10px" id="save-case-btn" onclick="saveAndDispatchIntake(false)">
+                                    💾 Save Patient Intake Record
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 2: TODAY'S TRIAGE QUEUE LOG -->
+            <div id="tab-queue" class="tab-content" style="display:none">
+                <div class="desk-card">
+                    <div class="desk-card-title">
+                        <span>Today's Outpatient Triage Registry</span>
+                        <button class="btn btn-ghost btn-sm" onclick="loadRecentTriages()">🔄 Refresh Log</button>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Time</th>
+                                    <th>Patient</th>
+                                    <th>Chief Complaint</th>
+                                    <th>Vitals</th>
+                                    <th>Priority</th>
+                                    <th>Assigned Doctor</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="triage-log-tbody">
+                                <tr><td colspan="7" style="text-align:center;padding:24px;color:var(--gray-400)">Loading triage logs...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Gemini API Key Modal -->
+    <div id="apikey-modal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:100;align-items:center;justify-content:center">
+        <div style="background:white;border-radius:var(--radius-lg);padding:24px;width:100%;max-width:480px;box-shadow:var(--shadow-xl)">
+            <h3 style="margin-bottom:4px;font-size:1.2rem">✨ Configure Google Gemini AI</h3>
+            <p style="font-size:0.85rem;color:var(--gray-500);margin-bottom:16px">The system already includes a built-in offline clinical NLP extractor. To enable live Google Gemini 1.5/2.0 Flash processing, paste your API key below:</p>
+            <form onsubmit="return handleSaveApiKey(event)">
+                <div class="form-group" style="margin-bottom:14px">
+                    <label class="form-label">Gemini API Key</label>
+                    <input type="password" class="form-input" id="gemini-key-input" placeholder="AIzaSy...">
+                </div>
+                <div style="display:flex;gap:10px;justify-content:flex-end">
+                    <button type="button" class="btn btn-secondary" onclick="toggleApiKeyModal(false)">Close</button>
+                    <button type="submit" class="btn btn-primary" id="save-key-btn">Save & Link Key</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/api.js"></script>
+    <script src="js/toast.js"></script>
+    <script src="js/voice.js"></script>
+    <script>
+        function toggleApiKeyModal(show) {
+            document.getElementById('apikey-modal').style.display = show ? 'flex' : 'none';
+        }
+
+        async function handleSaveApiKey(e) {
+            e.preventDefault();
+            const key = document.getElementById('gemini-key-input').value.trim();
+            if (!key) {
+                showToast('Please enter an API key', 'warning');
+                return false;
+            }
+            try {
+                const btn = document.getElementById('save-key-btn');
+                btn.textContent = 'Linking...';
+                btn.disabled = true;
+                const res = await api.configureGeminiKey(key);
+                showToast(res.message || 'Gemini linked successfully!', 'success');
+                toggleApiKeyModal(false);
+            } catch (err) {
+                showToast(err.message || 'Configuration failed', 'error');
+            } finally {
+                const btn = document.getElementById('save-key-btn');
+                btn.textContent = 'Save & Link Key';
+                btn.disabled = false;
+            }
+            return false;
+        }
+        // State
+        let currentPatientId = null;
+        let selectedDoctorId = null;
+        let doctorsList = [];
+        let isRecording = false;
+
+        // Init
+        document.addEventListener('DOMContentLoaded', async () => {
+            // Check auth
+            if (!api.isLoggedIn()) {
+                window.location.href = 'login.html';
+                return;
+            }
+            const role = api.getRole();
+            if (role === 'doctor') {
+                window.location.href = 'doctor-dashboard.html';
+                return;
+            }
+            if (role === 'patient') {
+                window.location.href = 'patient-dashboard.html';
+                return;
+            }
+
+            document.getElementById('user-name').textContent = api.getName() || 'Clinical Assistant';
+            await loadStats();
+            await loadDoctors();
+            await loadRecentTriages();
+        });
+
+        function switchMainTab(tab) {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
+
+            if (tab === 'desk') {
+                document.getElementById('nav-desk-btn').classList.add('active');
+                document.getElementById('tab-desk').style.display = 'block';
+            } else {
+                document.getElementById('nav-queue-btn').classList.add('active');
+                document.getElementById('tab-queue').style.display = 'block';
+                loadRecentTriages();
+            }
+        }
+
+        async function loadStats() {
+            try {
+                const res = await api.getAssistantStats();
+                document.getElementById('stat-total').textContent = res.total_triaged_by_user || 0;
+                document.getElementById('stat-emergency').textContent = res.emergency_count || 0;
+                document.getElementById('stat-urgent').textContent = res.urgent_count || 0;
+                document.getElementById('stat-dispatched').textContent = res.pending_doctor_review || 0;
+            } catch (err) {
+                console.error('Failed to load stats:', err);
+            }
+        }
+
+        async function loadDoctors() {
+            try {
+                doctorsList = await api.getAvailableDoctors();
+                renderDoctorList();
+            } catch (err) {
+                console.error('Failed to load doctors:', err);
+            }
+        }
+
+        function renderDoctorList() {
+            const container = document.getElementById('doctor-selection-list');
+            if (!doctorsList || doctorsList.length === 0) {
+                container.innerHTML = '<div style="color:var(--gray-400)">No doctors currently active.</div>';
+                return;
+            }
+
+            container.innerHTML = doctorsList.map((doc, idx) => `
+                <div class="doctor-card-select ${selectedDoctorId === doc.id ? 'selected' : (idx === 0 && !selectedDoctorId ? 'selected' : '')}"
+                     onclick="selectDoctor('${doc.id}', this)">
+                    <div>
+                        <div style="font-weight:700;color:var(--gray-900);font-size:0.92rem">${doc.name}</div>
+                        <div style="font-size:0.78rem;color:var(--primary-600);font-weight:600">${doc.specialization} • ${doc.hospital}</div>
+                    </div>
+                    <div style="text-align:right">
+                        <span style="font-size:0.75rem;padding:2px 8px;border-radius:12px;background:#e0f2fe;color:#0369a1;font-weight:600">
+                            Queue: ${doc.pending_queue_count || 0}
+                        </span>
+                    </div>
+                </div>
+            `).join('');
+
+            if (!selectedDoctorId && doctorsList.length > 0) {
+                selectedDoctorId = doctorsList[0].id;
+            }
+        }
+
+        function selectDoctor(docId, el) {
+            selectedDoctorId = docId;
+            document.querySelectorAll('.doctor-card-select').forEach(c => c.classList.remove('selected'));
+            if (el) el.classList.add('selected');
+        }
+
+        // Patient Search & Selection
+        let searchTimeout = null;
+        function debouncePatientSearch() {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(searchPatients, 250);
+        }
+
+        async function searchPatients() {
+            const query = document.getElementById('patient-search-input').value.trim();
+            const dropdown = document.getElementById('patient-search-dropdown');
+            if (!query) {
+                dropdown.style.display = 'none';
+                return;
+            }
+
+            try {
+                const results = await api.searchPatients(query);
+                if (results.length === 0) {
+                    dropdown.innerHTML = '<div style="padding:10px;font-size:0.85rem;color:var(--gray-500)">No patients found with that name. You can fill the fields directly below.</div>';
+                } else {
+                    dropdown.innerHTML = results.map(p => `
+                        <div style="padding:10px 14px;border-bottom:1px solid var(--gray-100);cursor:pointer;display:flex;justify-content:space-between;align-items:center"
+                             onclick='selectPatient(${JSON.stringify(p).replace(/'/g, "&apos;")})'>
+                            <div>
+                                <div style="font-weight:700;font-size:0.9rem;color:var(--gray-900)">${p.name}</div>
+                                <div style="font-size:0.78rem;color:var(--gray-500)">${p.age || '—'} Y • ${p.gender || '—'} • ${p.phone || 'No phone'}</div>
+                            </div>
+                            <span style="font-size:0.75rem;font-weight:600;color:var(--primary-600)">${p.medical_record_number || ''}</span>
+                        </div>
+                    `).join('');
+                }
+                dropdown.style.display = 'block';
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        function selectPatient(patient) {
+            currentPatientId = patient.id;
+            document.getElementById('patient-search-dropdown').style.display = 'none';
+            document.getElementById('patient-search-input').value = '';
+            document.getElementById('pat-name-input').value = patient.name || '';
+            document.getElementById('pat-age-input').value = patient.age || '';
+            if (patient.gender) document.getElementById('pat-gender-input').value = patient.gender;
+            if (patient.phone) document.getElementById('pat-phone-input').value = patient.phone;
+            if (patient.blood_group) document.getElementById('pat-blood-input').value = patient.blood_group;
+
+            showToast(`Loaded patient: ${patient.name}`, 'info');
+        }
+
+        // Voice Dictation
+        function changeVoiceLanguage(lang) {
+            voiceInput.setLanguage(lang);
+        }
+
+        function toggleVoiceDictation() {
+            const btn = document.getElementById('voice-record-btn');
+            const pulse = document.getElementById('live-audio-pulse');
+            const icon = document.getElementById('voice-icon');
+            const statusTxt = document.getElementById('voice-status-text');
+            const liveSpeech = document.getElementById('live-speech-box');
+            const notesInput = document.getElementById('nurse-notes-input');
+
+            if (isRecording) {
+                voiceInput.stop();
+                isRecording = false;
+                btn.classList.remove('recording');
+                pulse.style.display = 'none';
+                icon.textContent = '🎤';
+                statusTxt.textContent = 'Dictate Symptoms';
+                return;
+            }
+
+            const success = voiceInput.start((transcript, isFinal) => {
+                liveSpeech.textContent = `"${transcript}"`;
+                if (isFinal) {
+                    const currentVal = notesInput.value.trim();
+                    notesInput.value = currentVal ? `${currentVal} ${transcript}` : transcript;
+                    liveSpeech.textContent = `Captured: "${transcript}"`;
+                    checkVitalsAlerts();
+                }
+            }, (err) => {
+                showToast(err, 'error');
+                isRecording = false;
+                btn.classList.remove('recording');
+                pulse.style.display = 'none';
+                icon.textContent = '🎤';
+                statusTxt.textContent = 'Dictate Symptoms';
+            });
+
+            if (success) {
+                isRecording = true;
+                btn.classList.add('recording');
+                pulse.style.display = 'inline';
+                icon.textContent = '⏹️';
+                statusTxt.textContent = 'Stop Dictating';
+            }
+        }
+
+        function appendPrompt(text) {
+            const notes = document.getElementById('nurse-notes-input');
+            const cur = notes.value.trim();
+            notes.value = cur ? `${cur} ${text}` : text;
+        }
+
+        // Vitals Abnormal Range Checking
+        function checkVitalsAlerts() {
+            const bp = document.getElementById('vital-bp').value.trim();
+            const spo2 = parseFloat(document.getElementById('vital-spo2').value);
+            const pulse = parseFloat(document.getElementById('vital-pulse').value);
+            const temp = parseFloat(document.getElementById('vital-temp').value);
+            const banner = document.getElementById('vitals-warning-banner');
+
+            let alerts = [];
+            if (spo2 && spo2 < 92) alerts.push(`🚨 Critically Low Oxygen: SpO2 is ${spo2}% (Normal > 95%)`);
+            if (pulse && (pulse > 115 || pulse < 50)) alerts.push(`⚠️ Abnormal Heart Rate: ${pulse} bpm`);
+            if (temp && temp >= 102) alerts.push(`⚠️ High Grade Pyrexia: ${temp}°F`);
+            if (bp && bp.includes('/')) {
+                const sys = parseFloat(bp.split('/')[0]);
+                if (sys >= 170) alerts.push(`🚨 Severe Hypertension Alert: Systolic BP ${sys} mmHg`);
+            }
+
+            if (alerts.length > 0) {
+                banner.style.display = 'block';
+                banner.innerHTML = alerts.join('<br>');
+            } else {
+                banner.style.display = 'none';
+            }
+        }
+
+        // AI Clinical Extraction
+        async function runAIExtraction() {
+            const notes = document.getElementById('nurse-notes-input').value.trim();
+            if (!notes) {
+                showToast('Please type or dictate patient symptoms first.', 'warning');
+                return;
+            }
+
+            const vitals = {
+                bp: document.getElementById('vital-bp').value.trim(),
+                pulse: document.getElementById('vital-pulse').value.trim(),
+                spo2: document.getElementById('vital-spo2').value.trim(),
+                temp: document.getElementById('vital-temp').value.trim(),
+                rbs: document.getElementById('vital-rbs').value.trim(),
+            };
+
+            const btn = document.getElementById('ai-extract-btn');
+            btn.textContent = '⏳ AI Structuring & Analyzing...';
+            btn.disabled = true;
+
+            try {
+                const res = await api.aiExtractNotes({
+                    notes: notes,
+                    voice_transcript: document.getElementById('live-speech-box').textContent,
+                    vitals: vitals,
+                    language: document.getElementById('dictation-lang').value
+                });
+
+                document.getElementById('extracted-chief-complaint').value = res.chief_complaint || notes;
+                if (res.suggested_pathway) {
+                    document.getElementById('extracted-pathway').value = res.suggested_pathway;
+                }
+                document.getElementById('extracted-severity').value = res.severity || 5;
+                document.getElementById('extracted-hpi').value = res.hpi_narrative || notes;
+                document.getElementById('extracted-pmh').value = res.past_medical_history || 'None reported';
+                document.getElementById('extracted-allergies').value = (res.allergies || []).join(', ') || 'No known allergies';
+
+                // Triage Badge
+                const badge = document.getElementById('triage-urgency-badge');
+                badge.className = 'triage-badge';
+                const triageLvl = res.triage_level || 'ROUTINE';
+                if (triageLvl === 'EMERGENCY') {
+                    badge.classList.add('triage-emergency');
+                    badge.textContent = '🔴 EMERGENCY';
+                } else if (triageLvl === 'URGENT') {
+                    badge.classList.add('triage-urgent');
+                    badge.textContent = '🟡 URGENT';
+                } else {
+                    badge.classList.add('triage-routine');
+                    badge.textContent = '🟢 ROUTINE';
+                }
+
+                // Red Flags
+                const rfContainer = document.getElementById('red-flags-container');
+                if (res.red_flags && res.red_flags.length > 0) {
+                    rfContainer.style.display = 'block';
+                    rfContainer.innerHTML = res.red_flags.map(rf => `
+                        <div class="alert-card">
+                            <strong>⚠️ Red Flag Detected:</strong> ${rf}
+                        </div>
+                    `).join('');
+                } else {
+                    rfContainer.style.display = 'none';
+                }
+
+                // Auto-recommend specialist doctor if matched
+                if (res.recommended_specialization && doctorsList.length > 0) {
+                    const match = doctorsList.find(d => d.specialization.toLowerCase().includes(res.recommended_specialization.toLowerCase()));
+                    if (match) {
+                        selectDoctor(match.id, null);
+                        renderDoctorList();
+                    }
+                }
+
+                showToast('AI Clinical Extraction completed successfully!', 'success');
+            } catch (err) {
+                showToast(err.message || 'AI extraction failed', 'error');
+            } finally {
+                btn.textContent = '✨ Run AI Clinical Extraction & Triage';
+                btn.disabled = false;
+            }
+        }
+
+        // Save and Dispatch
+        async function saveAndDispatchIntake(shouldDispatch = true) {
+            const patName = document.getElementById('pat-name-input').value.trim();
+            if (!patName) {
+                showToast('Please enter the Patient Full Name in Box 1.', 'warning');
+                document.getElementById('pat-name-input').focus();
+                return;
+            }
+
+            const rawNotes = document.getElementById('nurse-notes-input').value.trim();
+            const chiefComplaint = document.getElementById('extracted-chief-complaint').value.trim() || rawNotes || 'General Outpatient Consultation';
+
+            const vitals = {
+                bp: document.getElementById('vital-bp').value.trim(),
+                pulse: document.getElementById('vital-pulse').value.trim(),
+                spo2: document.getElementById('vital-spo2').value.trim(),
+                temp: document.getElementById('vital-temp').value.trim(),
+                rbs: document.getElementById('vital-rbs').value.trim(),
+            };
+
+            const patAgeVal = document.getElementById('pat-age-input').value.trim();
+            const patAge = patAgeVal ? parseInt(patAgeVal) : null;
+            const patGender = document.getElementById('pat-gender-input').value;
+            const patPhone = document.getElementById('pat-phone-input').value.trim() || null;
+            const patBlood = document.getElementById('pat-blood-input').value || null;
+
+            const payload = {
+                patient_id: currentPatientId,
+                patient_name: patName,
+                patient_age: patAge,
+                patient_gender: patGender,
+                patient_phone: patPhone,
+                patient_blood_group: patBlood,
+                assigned_doctor_id: shouldDispatch ? selectedDoctorId : null,
+                language: document.getElementById('dictation-lang').value,
+                nurse_notes: rawNotes,
+                chief_complaint: chiefComplaint,
+                pathway: document.getElementById('extracted-pathway').value,
+                severity: parseInt(document.getElementById('extracted-severity').value) || 5,
+                onset_duration: "Recent",
+                past_medical_history: document.getElementById('extracted-pmh').value.trim(),
+                allergies: [document.getElementById('extracted-allergies').value.trim()],
+                vitals: vitals,
+                triage_level: document.getElementById('triage-urgency-badge').textContent.includes('EMERGENCY') ? 'EMERGENCY' : (document.getElementById('triage-urgency-badge').textContent.includes('URGENT') ? 'URGENT' : 'ROUTINE'),
+                structured_data: {
+                    hpi: document.getElementById('extracted-hpi').value.trim()
+                }
+            };
+
+            const btn = shouldDispatch ? document.getElementById('dispatch-case-btn') : document.getElementById('save-case-btn');
+            const originalText = btn.textContent;
+            btn.textContent = '⏳ Saving & Processing...';
+            btn.disabled = true;
+
+            try {
+                const res = await api.submitTriageIntake(payload);
+                showToast(res.message || 'Patient case successfully saved and triaged!', 'success');
+
+                // Clear desk for next patient
+                setTimeout(() => {
+                    currentPatientId = null;
+                    document.getElementById('pat-name-input').value = '';
+                    document.getElementById('pat-age-input').value = '';
+                    document.getElementById('pat-phone-input').value = '';
+                    document.getElementById('nurse-notes-input').value = '';
+                    document.getElementById('vital-bp').value = '';
+                    document.getElementById('vital-pulse').value = '';
+                    document.getElementById('vital-spo2').value = '';
+                    document.getElementById('vital-temp').value = '';
+                    document.getElementById('vital-rbs').value = '';
+                    document.getElementById('extracted-chief-complaint').value = '';
+                    document.getElementById('extracted-hpi').value = '';
+                    document.getElementById('extracted-pmh').value = '';
+                    document.getElementById('extracted-allergies').value = '';
+                    document.getElementById('red-flags-container').style.display = 'none';
+                    loadStats();
+                    loadDoctors();
+                    loadRecentTriages();
+                }, 1000);
+
+            } catch (err) {
+                showToast(err.message || 'Failed to save triage intake', 'error');
+            } finally {
+                btn.textContent = originalText;
+                btn.disabled = false;
+            }
+        }
+
+        // Today's Triage Queue
+        async function loadRecentTriages() {
+            const tbody = document.getElementById('triage-log-tbody');
+            try {
+                const list = await api.getRecentTriages();
+                if (!list || list.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--gray-400)">No triage cases logged yet today.</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = list.map(item => {
+                    const time = item.created_at ? new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—';
+                    let priorityBadge = '<span class="triage-badge triage-routine">ROUTINE</span>';
+                    if (item.triage_level === 'EMERGENCY') {
+                        priorityBadge = '<span class="triage-badge triage-emergency">🔴 EMERGENCY</span>';
+                    } else if (item.triage_level === 'URGENT') {
+                        priorityBadge = '<span class="triage-badge triage-urgent">🟡 URGENT</span>';
+                    }
+
+                    const vitalsSummary = item.vitals && Object.keys(item.vitals).length > 0
+                        ? `BP: ${item.vitals.bp || '—'} | SpO2: ${item.vitals.spo2 ? item.vitals.spo2 + '%' : '—'}`
+                        : '—';
+
+                    return `
+                        <tr>
+                            <td style="font-weight:600;color:var(--gray-600)">${time}</td>
+                            <td>
+                                <div style="font-weight:700;color:var(--gray-900)">${item.patient_name}</div>
+                                <div style="font-size:0.75rem;color:var(--gray-500)">${item.age || '—'}Y • ${item.gender || '—'} • ${item.mrn || ''}</div>
+                            </td>
+                            <td style="max-width:240px">
+                                <div style="font-size:0.875rem;font-weight:500;color:var(--gray-800)">${item.chief_complaint || 'General Check'}</div>
+                                <div style="font-size:0.75rem;color:var(--primary-600)">Pathway: ${item.pathway || 'general'}</div>
+                            </td>
+                            <td style="font-size:0.8rem;color:var(--gray-600)">${vitalsSummary}</td>
+                            <td>${priorityBadge}</td>
+                            <td>
+                                <div style="font-weight:600;font-size:0.85rem">${item.assigned_doctor_name}</div>
+                                <div style="font-size:0.75rem;color:var(--gray-500)">${item.assigned_doctor_spec}</div>
+                            </td>
+                            <td>
+                                <span style="padding:3px 8px;border-radius:12px;font-size:0.75rem;font-weight:600;background:#dcfce7;color:#166534">
+                                    Dispatched
+                                </span>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        function logout() {
+            api.clearAuth();
+            window.location.href = 'login.html';
+        }
+    </script>
+</body>
+</html>

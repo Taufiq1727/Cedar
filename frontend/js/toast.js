@@ -50,3 +50,7 @@ class ToastManager {
 }
 
 const toast = new ToastManager();
+
+function showToast(message, type = 'info', duration = 4000) {
+    toast.show(message, type, duration);
+}

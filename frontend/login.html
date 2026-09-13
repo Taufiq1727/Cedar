@@ -35,6 +35,26 @@
                         </div>
                         <div id="login-error" class="form-error" style="margin-bottom:var(--space-3)"></div>
                         <button type="submit" class="btn btn-primary" style="width:100%" id="login-btn">Login</button>
+
+                        <!-- Quick Demo Accounts -->
+                        <div style="margin-top:var(--space-4);padding-top:var(--space-3);border-top:1px solid var(--gray-200)">
+                            <div style="font-size:0.75rem;font-weight:700;color:var(--gray-500);text-transform:uppercase;margin-bottom:8px">⚡ Quick 1-Click Demo Logins:</div>
+                            <div style="display:grid;grid-template-columns:1fr;gap:6px">
+                                <button type="button" class="btn btn-ghost btn-sm" style="text-align:left;justify-content:flex-start;background:#f0fdf4;border:1px solid #bbf7d0;color:#166534"
+                                        onclick="fillDemoLogin('nurse.sunita@clinassistai.com', 'Nurse@123')">
+                                    👩‍⚕️ <strong>Nurse Sunita Verma</strong> (OPD Triage Station)
+                                </button>
+                                <button type="button" class="btn btn-ghost btn-sm" style="text-align:left;justify-content:flex-start;background:#eff6ff;border:1px solid #bfdbfe;color:#1e40af"
+                                        onclick="fillDemoLogin('siddharth.varma@clinassistai.com', 'Doctor@123')">
+                                    👨‍⚕️ <strong>Dr. Siddharth Varma</strong> (Cardiologist)
+                                </button>
+                                <button type="button" class="btn btn-ghost btn-sm" style="text-align:left;justify-content:flex-start;background:#faf5ff;border:1px solid #e9d5ff;color:#6b21a8"
+                                        onclick="fillDemoLogin('roshni.sen@clinassistai.com', 'Doctor@123')">
+                                    👨‍⚕️ <strong>Dr. Roshni Sen</strong> (Ophthalmology)
+                                </button>
+                            </div>
+                        </div>
+
                         <div class="auth-footer">
                             Don't have an account? <a href="#" onclick="switchTab('register')">Register here</a>
                         </div>
@@ -46,8 +66,9 @@
                         <p class="subtitle">Choose your role to get started</p>
 
                         <div class="role-selector">
-                            <button type="button" class="role-btn active" data-role="patient" onclick="selectRole('patient')">🧑 Patient</button>
+                            <button type="button" class="role-btn active" data-role="assistant" onclick="selectRole('assistant')">👩‍⚕️ Nurse / Assistant</button>
                             <button type="button" class="role-btn" data-role="doctor" onclick="selectRole('doctor')">👨‍⚕️ Doctor</button>
+                            <button type="button" class="role-btn" data-role="patient" onclick="selectRole('patient')">🧑 Patient</button>
                         </div>
 
                         <div class="form-group">
@@ -68,7 +89,7 @@
                         </div>
 
                         <!-- Patient-specific fields -->
-                        <div class="patient-fields active" id="patient-fields">
+                        <div class="patient-fields" id="patient-fields">
                             <div class="form-row">
                                 <div class="form-group">
                                     <label class="form-label">Age</label>
@@ -86,20 +107,20 @@
                             </div>
                         </div>
 
-                        <!-- Doctor-specific fields -->
+                        <!-- Doctor/Assistant-specific fields -->
                         <div class="doctor-fields" id="doctor-fields">
                             <div class="form-group">
-                                <label class="form-label">Hospital/Organization</label>
+                                <label class="form-label">Hospital / Clinic</label>
                                 <input type="text" class="form-input" id="reg-hospital" placeholder="Hospital name">
                             </div>
                             <div class="form-row">
                                 <div class="form-group">
-                                    <label class="form-label">Professional ID</label>
-                                    <input type="text" class="form-input" id="reg-prof-id" placeholder="e.g., MCI number">
+                                    <label class="form-label">Staff / Professional ID</label>
+                                    <input type="text" class="form-input" id="reg-prof-id" placeholder="e.g., REG-10928">
                                 </div>
                                 <div class="form-group">
-                                    <label class="form-label">Specialization</label>
-                                    <input type="text" class="form-input" id="reg-specialization" placeholder="e.g., General Medicine">
+                                    <label class="form-label">Department / Specialization</label>
+                                    <input type="text" class="form-input" id="reg-specialization" placeholder="e.g., Triage OPD / Cardiology">
                                 </div>
                             </div>
                         </div>
@@ -118,7 +139,7 @@
     <script src="js/api.js"></script>
     <script src="js/toast.js"></script>
     <script>
-        let selectedRole = 'patient';
+        let selectedRole = 'assistant';
 
         // Parse URL params for tab/role
         const params = new URLSearchParams(window.location.search);
@@ -127,7 +148,23 @@
 
         // Redirect if already logged in
         if (api.isLoggedIn()) {
-            window.location.href = api.getRole() === 'doctor' ? '/doctor-dashboard.html' : '/patient-dashboard.html';
+            redirectByRole(api.getRole());
+        }
+
+        function redirectByRole(role) {
+            if (role === 'doctor') {
+                window.location.href = '/doctor-dashboard.html';
+            } else if (role === 'assistant' || role === 'nurse') {
+                window.location.href = '/assistant-dashboard.html';
+            } else {
+                window.location.href = '/patient-dashboard.html';
+            }
+        }
+
+        function fillDemoLogin(email, password) {
+            document.getElementById('login-email').value = email;
+            document.getElementById('login-password').value = password;
+            document.getElementById('form-login').dispatchEvent(new Event('submit', { cancelable: true }));
         }
 
         function switchTab(tab) {
@@ -142,7 +179,7 @@
             document.querySelectorAll('.role-btn').forEach(b => b.classList.remove('active'));
             document.querySelector(`[data-role="${role}"]`).classList.add('active');
             document.getElementById('patient-fields').classList.toggle('active', role === 'patient');
-            document.getElementById('doctor-fields').classList.toggle('active', role === 'doctor');
+            document.getElementById('doctor-fields').classList.toggle('active', role === 'doctor' || role === 'assistant');
         }
 
         // Tab click handlers
@@ -163,10 +200,10 @@
                     document.getElementById('login-email').value,
                     document.getElementById('login-password').value
                 );
-                toast.success(`Welcome back, ${result.name}!`);
+                showToast(`Welcome back, ${result.name}!`, 'success');
                 setTimeout(() => {
-                    window.location.href = result.role === 'doctor' ? '/doctor-dashboard.html' : '/patient-dashboard.html';
-                }, 500);
+                    redirectByRole(result.role);
+                }, 400);
             } catch (err) {
                 errorEl.textContent = err.message;
                 btn.disabled = false;
@@ -202,10 +239,10 @@
 
             try {
                 const result = await api.register(data);
-                toast.success(`Account created! Welcome, ${result.name}!`);
+                showToast(`Account created! Welcome, ${result.name}!`, 'success');
                 setTimeout(() => {
-                    window.location.href = result.role === 'doctor' ? '/doctor-dashboard.html' : '/patient-dashboard.html';
-                }, 500);
+                    redirectByRole(result.role);
+                }, 400);
             } catch (err) {
                 errorEl.textContent = err.message;
                 btn.disabled = false;

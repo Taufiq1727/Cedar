@@ -84,10 +84,23 @@ def get_patient_queue(user: User = Depends(require_doctor), db: Session = Depend
         medium_flags = [f for f in red_flags if f.severity == "MEDIUM"]
         priority = "HIGH" if high_flags else ("MEDIUM" if medium_flags else "NORMAL")
 
+        # Get assistant/nurse info
+        assistant_name = None
+        if s.assistant_id:
+            ast = db.query(User).filter(User.id == s.assistant_id).first()
+            if ast:
+                assistant_name = ast.name
+
         # Get assigned doctor info
         assigned_doc = None
         if s.assigned_doctor_id:
-            assigned_doc = get_doctor_profile_for_patient(db, s.assigned_doctor_id)
+            d_obj = db.query(Doctor).filter(Doctor.id == s.assigned_doctor_id).first()
+            if d_obj:
+                d_user = db.query(User).filter(User.id == d_obj.user_id).first()
+                if d_user:
+                    assigned_doc = d_user.name
+
+        triage_lvl = s.triage_level or priority
 
         queue.append({
             "session_id": s.id,
@@ -100,6 +113,11 @@ def get_patient_queue(user: User = Depends(require_doctor), db: Session = Depend
             "status": s.status,
             "progress_pct": s.progress_pct,
             "priority": priority,
+            "triage_level": triage_lvl,
+            "vitals": s.vitals or {},
+            "nurse_notes": s.nurse_notes,
+            "assistant_name": assistant_name,
+            "intake_source": s.intake_source or "assistant_triage",
             "red_flag_count": len(red_flags),
             "high_priority_flags": len(high_flags),
             "has_summary": summary is not None,
@@ -145,10 +163,21 @@ def get_patient_detail(
         red_flags = db.query(RedFlagAlert).filter(RedFlagAlert.session_id == s.id).all()
         summary = db.query(ClinicalSummary).filter(ClinicalSummary.session_id == s.id).first()
 
-        # Get assigned doctor info for this session
+        # Get assistant/nurse info
+        assistant_name = None
+        if s.assistant_id:
+            ast = db.query(User).filter(User.id == s.assistant_id).first()
+            if ast:
+                assistant_name = ast.name
+
+        # Get assigned doctor info
         assigned_doc = None
         if s.assigned_doctor_id:
-            assigned_doc = get_doctor_profile_for_patient(db, s.assigned_doctor_id)
+            d_obj = db.query(Doctor).filter(Doctor.id == s.assigned_doctor_id).first()
+            if d_obj:
+                d_user = db.query(User).filter(User.id == d_obj.user_id).first()
+                if d_user:
+                    assigned_doc = d_user.name
 
         sessions_data.append({
             "id": s.id,
@@ -157,6 +186,11 @@ def get_patient_detail(
             "status": s.status,
             "progress_pct": s.progress_pct,
             "language": s.language,
+            "triage_level": s.triage_level or "ROUTINE",
+            "vitals": s.vitals or {},
+            "nurse_notes": s.nurse_notes,
+            "assistant_name": assistant_name,
+            "intake_source": s.intake_source or "assistant_triage",
             "structured_data": s.structured_data,
             "assigned_doctor": assigned_doc,
             "created_at": s.created_at.isoformat() if s.created_at else None,

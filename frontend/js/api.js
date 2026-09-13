@@ -193,6 +193,53 @@ class ApiClient {
     async getSessionSummary(sessionId) {
         return this.request(`/doctor/summary/${sessionId}`);
     }
+
+    // Assistant / Nurse Triage
+    async getAssistantStats() {
+        return this.request('/assistant/stats');
+    }
+
+    async getAvailableDoctors(specialization = '') {
+        const query = specialization ? `?specialization=${encodeURIComponent(specialization)}` : '';
+        return this.request(`/assistant/doctors${query}`);
+    }
+
+    async searchPatients(q = '') {
+        const query = q ? `?q=${encodeURIComponent(q)}` : '';
+        return this.request(`/assistant/patients/search${query}`);
+    }
+
+    async registerPatient(data) {
+        return this.request('/assistant/patients/register', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
+    }
+
+    async aiExtractNotes(data) {
+        return this.request('/assistant/ai-extract', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
+    }
+
+    async submitTriageIntake(data) {
+        return this.request('/assistant/triage-intake', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
+    }
+
+    async getRecentTriages() {
+        return this.request('/assistant/recent-triages');
+    }
+
+    async configureGeminiKey(apiKey) {
+        return this.request('/ai/configure-key', {
+            method: 'POST',
+            body: JSON.stringify({ api_key: apiKey }),
+        });
+    }
 }
 
 // Global instance

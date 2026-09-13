@@ -17,11 +17,16 @@ if _has_gemini():
     except Exception as e:
         logger.warning(f"Failed to configure Gemini API: {e}")
 
-MODEL_NAME = "gemini-1.5-flash"
+MODEL_NAME = "gemini-3.6-flash"
 
 
 def _get_model():
-    """Get a Gemini model instance."""
+    """Get a Gemini model instance with automatic fallback."""
+    for m in [MODEL_NAME, "gemini-3.5-flash", "gemini-flash-latest"]:
+        try:
+            return genai.GenerativeModel(m)
+        except Exception:
+            continue
     return genai.GenerativeModel(MODEL_NAME)
 
 
@@ -243,6 +248,244 @@ Rules:
         logger.error(f"Gemini document extraction failed: {e}")
 
     return {"raw_text": ocr_text, "extraction_status": "extraction_failed"}
+
+
+async def extract_assistant_triage_notes(notes: str, spoken_transcript: str = "", vitals: dict = None, language: str = "en") -> dict:
+    """Extract clinical triage entities from nurse/assistant notes, voice transcripts, and vitals."""
+    combined_text = f"Nurse Notes: {notes}\nSpoken Dialogue/Audio Transcript: {spoken_transcript}".strip()
+    if vitals:
+        combined_text += f"\nRecorded Vitals: {json.dumps(vitals)}"
+
+    if not _has_gemini():
+        return _fallback_assistant_triage(notes, spoken_transcript, vitals)
+
+    prompt = f"""You are a clinical AI triage assistant helping an Indian hospital outpatient/emergency desk.
+Analyze the following nurse/assistant triage input (voice transcript or notes) and vitals:
+
+Input:
+\"\"\"
+{combined_text}
+\"\"\"
+
+Extract and structure into standard clinical intake fields. Return ONLY valid JSON:
+{{
+    "chief_complaint": "Clear primary complaint (e.g. Severe chest pain with sweating)",
+    "suggested_pathway": "chest_pain | fever | headache | abdominal_pain | cough_breathing | general",
+    "onset_duration": "Duration (e.g. 3 hours, 4 days)",
+    "severity": 1-10 integer,
+    "hpi_narrative": "Cohesive medical summary of History of Present Illness",
+    "associated_symptoms": ["list of symptoms like nausea, breathlessness, dizziness"],
+    "past_medical_history": "Relevant chronic diseases (hypertension, diabetes, asthma, CAD, etc.) or 'None reported'",
+    "current_medications": ["list of medications or empty"],
+    "allergies": ["list of allergies or 'No known allergies'"],
+    "vitals_assessment": "Short assessment of vitals (e.g., Hypertensive urgency, Tachycardia, Normal vitals)",
+    "red_flags": ["List of critical warning signs or emergencies detected"],
+    "triage_level": "EMERGENCY | URGENT | ROUTINE",
+    "recommended_specialization": "Cardiology | Neurology | Pulmonology | Gastroenterology | Orthopedics | General Medicine | Dermatology | ENT | Pediatrics"
+}}"""
+
+    try:
+        model = _get_model()
+        response = model.generate_content(prompt)
+        result = _safe_json_parse(response.text)
+        if result:
+            return result
+    except Exception as e:
+        logger.error(f"Assistant triage AI parsing failed: {e}")
+
+    return _fallback_assistant_triage(notes, spoken_transcript, vitals)
+
+
+import re
+
+def _fallback_assistant_triage(notes: str, spoken_transcript: str = "", vitals: dict = None) -> dict:
+    """Advanced rule-based clinical NLP triage extractor."""
+    raw_text = (notes + " " + spoken_transcript).strip()
+    text = raw_text.lower()
+    vitals = vitals or {}
+
+    # Extract Duration / Onset via regex
+    duration_match = re.search(r'(\d+\s*(?:hours?|hrs?|days?|weeks?|months?|years?|mins?|minutes?)|since\s+[a-zA-Z0-9\s]+|for\s+[a-zA-Z0-9\s]+)', text)
+    onset_duration = duration_match.group(0).strip() if duration_match else "Recent onset"
+
+    # Extract Associated Symptoms
+    symptom_keywords = {
+        "sweating": "Diaphoresis / Sweating",
+        "breathless": "Shortness of breath / Dyspnea",
+        "dyspnea": "Dyspnea",
+        "dizziness": "Dizziness / Vertigo",
+        "giddiness": "Giddiness",
+        "nausea": "Nausea",
+        "vomit": "Vomiting",
+        "fever": "Pyrexia / Fever",
+        "chills": "Chills & Rigors",
+        "cough": "Cough",
+        "palpitation": "Palpitations",
+        "tightness": "Chest tightness",
+        "headache": "Cephalea / Headache",
+        "weakness": "Generalized weakness",
+        "diarrhea": "Diarrhea / Loose stools",
+        "swelling": "Peripheral edema / Swelling",
+        "radiat": "Radiation to left arm/jaw",
+        "blur": "Visual blurring",
+    }
+    found_symptoms = [label for key, label in symptom_keywords.items() if key in text]
+
+    # Extract Past Medical History
+    pmh_keywords = {
+        "hypertens": "Essential Hypertension",
+        "high bp": "Hypertension (High BP)",
+        "htn": "Hypertension",
+        "diabet": "Type 2 Diabetes Mellitus",
+        "sugar": "Diabetes Mellitus",
+        "asthma": "Bronchial Asthma",
+        "copd": "COPD",
+        "thyroid": "Hypothyroidism / Thyroid Disorder",
+        "kidney": "Chronic Kidney Disease",
+        "ckd": "CKD",
+        "heart disease": "Coronary Artery Disease",
+        "cad": "CAD / Ischemic Heart Disease",
+        "stroke": "Past CVA / Stroke",
+        "cholesterol": "Dyslipidemia",
+        "arthritis": "Osteoarthritis / Arthritis",
+    }
+    found_pmh = list(set([label for key, label in pmh_keywords.items() if key in text]))
+    pmh_str = ", ".join(found_pmh) if found_pmh else "No chronic illness recorded"
+
+    # Extract Medications
+    med_keywords = [
+        "amlodipine", "telmisartan", "losartan", "atenolol", "metformin",
+        "glimepiride", "insulin", "aspirin", "atorvastatin", "clopidogrel",
+        "paracetamol", "pantoprazole", "omeprazole", "cetirizine", "inhaler",
+        "levothyroxine", "ecosprin", "azithromycin", "augmentin"
+    ]
+    found_meds = [m.capitalize() for m in med_keywords if m in text]
+
+    # Extract Allergies
+    allergy_keywords = ["penicillin", "sulfa", "aspirin", "nsaids", "dust", "pollen", "peanuts", "eggs"]
+    found_allergies = [f"Allergic to {a.capitalize()}" for a in allergy_keywords if a in text]
+    if not found_allergies:
+        found_allergies = ["No known drug allergies reported"]
+
+    # Pathway and Specialization Detection
+    pathway = "general"
+    rec_spec = "General Medicine"
+    red_flags = []
+    triage = "ROUTINE"
+
+    if any(k in text for k in ["chest", "heart", "angina", "cardiac", "infarct"]):
+        pathway = "chest_pain"
+        rec_spec = "Cardiology"
+        if any(k in text for k in ["sweat", "breathless", "radiat", "severe", "crushing", "arm", "jaw"]):
+            red_flags.append("Suspected Acute Coronary Syndrome (Chest pain + Autonomic/Radiation signs)")
+            triage = "EMERGENCY"
+        else:
+            triage = "URGENT"
+    elif any(k in text for k in ["fever", "chills", "pyrexia", "temperature"]):
+        pathway = "fever"
+        rec_spec = "General Medicine"
+        if any(k in text for k in ["high", "convulsion", "seizure", "delirium", "rash", "stiff"]):
+            red_flags.append("High grade fever with systemic warning signs")
+            triage = "URGENT"
+    elif any(k in text for k in ["headache", "head pain", "migraine", "vision"]):
+        pathway = "headache"
+        rec_spec = "Neurology"
+        if any(k in text for k in ["sudden", "worst", "thunderclap", "neck stiff", "weakness", "slur"]):
+            red_flags.append("Possible neurological emergency (Severe acute headache)")
+            triage = "EMERGENCY"
+    elif any(k in text for k in ["cough", "breath", "wheez", "asthma", "oxygen", "sputum"]):
+        pathway = "cough_breathing"
+        rec_spec = "Pulmonology"
+        if any(k in text for k in ["gasping", "stridor", "cyanosis", "blood", "hemoptysis"]):
+            red_flags.append("Severe respiratory compromise / Hemoptysis")
+            triage = "EMERGENCY"
+        else:
+            triage = "URGENT"
+    elif any(k in text for k in ["stomach", "abdomen", "vomit", "loose motion", "diarrhea", "belly"]):
+        pathway = "abdominal_pain"
+        rec_spec = "Gastroenterology"
+        if any(k in text for k in ["rigid", "blood", "black stool", "unbearable", "melena"]):
+            red_flags.append("Acute surgical abdomen / Gastrointestinal hemorrhage signs")
+            triage = "EMERGENCY"
+    elif any(k in text for k in ["eye", "vision", "cataract", "retina", "blur"]):
+        pathway = "general"
+        rec_spec = "Ophthalmology"
+    elif any(k in text for k in ["ear", "nose", "throat", "sinus", "tonsil"]):
+        pathway = "general"
+        rec_spec = "ENT"
+    elif any(k in text for k in ["bone", "fracture", "joint", "knee", "back", "spine"]):
+        pathway = "general"
+        rec_spec = "Orthopedics"
+    elif any(k in text for k in ["skin", "rash", "itching", "eczema", "psoriasis"]):
+        pathway = "general"
+        rec_spec = "Dermatology"
+
+    # Check Vitals Abnormalities
+    spo2 = vitals.get("spo2")
+    if spo2:
+        try:
+            val = float(spo2)
+            if val < 92:
+                red_flags.append(f"Hypoxia Alert: SpO2 critically low at {val}% (Normal > 95%)")
+                triage = "EMERGENCY"
+        except Exception:
+            pass
+
+    bp = vitals.get("bp", "")
+    if "/" in str(bp):
+        try:
+            sys_bp = float(str(bp).split("/")[0].strip())
+            if sys_bp >= 170:
+                red_flags.append(f"Severe Hypertension Alert: Systolic BP {sys_bp} mmHg")
+                if triage != "EMERGENCY":
+                    triage = "URGENT"
+        except Exception:
+            pass
+
+    temp = vitals.get("temp")
+    if temp:
+        try:
+            t_val = float(temp)
+            if t_val >= 102:
+                red_flags.append(f"High Grade Pyrexia Alert: Temperature {t_val}°F")
+                if triage == "ROUTINE":
+                    triage = "URGENT"
+        except Exception:
+            pass
+
+    # Clean standardized complaint
+    sentences = [s.strip() for s in raw_text.split(".") if s.strip()]
+    chief_comp = sentences[0] if sentences else (raw_text or "General Health Assessment")
+    if len(chief_comp) > 180:
+        chief_comp = chief_comp[:177] + "..."
+
+    severity_score = 8 if triage == "EMERGENCY" else (6 if triage == "URGENT" else 4)
+
+    hpi = f"Patient presented at the OPD Triage Station with {chief_comp.lower()} ({onset_duration}). "
+    if found_symptoms:
+        hpi += f"Associated clinical features include {', '.join(found_symptoms).lower()}. "
+    if found_pmh:
+        hpi += f"Significant past medical history includes {', '.join(found_pmh)}. "
+    if found_meds:
+        hpi += f"Patient reports taking {', '.join(found_meds)}. "
+    if vitals and any(vitals.values()):
+        hpi += f"Recorded triage vitals: BP {vitals.get('bp', '—')}, Pulse {vitals.get('pulse', '—')} bpm, SpO2 {vitals.get('spo2', '—')}%, Temp {vitals.get('temp', '—')}°F."
+
+    return {
+        "chief_complaint": chief_comp,
+        "suggested_pathway": pathway,
+        "onset_duration": onset_duration,
+        "severity": severity_score,
+        "hpi_narrative": hpi,
+        "associated_symptoms": found_symptoms,
+        "past_medical_history": pmh_str,
+        "current_medications": found_meds,
+        "allergies": found_allergies,
+        "vitals_assessment": "Abnormal vital signs detected" if red_flags else "Vitals stable",
+        "red_flags": red_flags,
+        "triage_level": triage,
+        "recommended_specialization": rec_spec,
+    }
 
 
 def _generate_fallback_summary(patient_data: dict) -> dict:

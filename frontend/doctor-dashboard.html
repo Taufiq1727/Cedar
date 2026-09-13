@@ -139,7 +139,15 @@
                 return;
             }
 
-            tbody.innerHTML = patients.map(p => `
+            tbody.innerHTML = patients.map(p => {
+                const vitalsText = p.vitals && Object.keys(p.vitals).length > 0
+                    ? `<span style="font-size:0.75rem;padding:2px 6px;border-radius:4px;background:var(--gray-100);color:var(--gray-700);font-weight:600">BP: ${p.vitals.bp || '—'} | SpO2: ${p.vitals.spo2 ? p.vitals.spo2 + '%' : '—'}</span>`
+                    : '';
+                const assistantBadge = p.assistant_name
+                    ? `<span style="font-size:0.72rem;color:var(--primary-700);background:var(--primary-50);padding:2px 6px;border-radius:4px;display:inline-block;margin-top:2px">👩‍⚕️ Triage: ${p.assistant_name}</span>`
+                    : '';
+
+                return `
                 <tr onclick="viewPatient('${p.patient_id}')">
                     <td>
                         <div class="patient-cell">
@@ -147,18 +155,22 @@
                             <div>
                                 <div class="patient-name">${escapeHtml(p.patient_name)}</div>
                                 <div class="patient-detail">${p.patient_age ? p.patient_age + 'y' : ''} ${p.patient_gender ? '• ' + p.patient_gender : ''}</div>
+                                ${assistantBadge}
                             </div>
                         </div>
                     </td>
-                    <td>${escapeHtml(p.chief_complaint || '—')}</td>
+                    <td>
+                        <div style="font-weight:500;color:var(--gray-900)">${escapeHtml(p.chief_complaint || '—')}</div>
+                        <div style="margin-top:4px">${vitalsText}</div>
+                    </td>
                     <td>${priorityBadge(p.priority)}</td>
                     <td>${statusBadge(p.status)}</td>
                     <td><span class="text-sm text-muted">${formatTimeAgo(p.created_at)}</span></td>
                     <td>
-                        <button class="btn btn-primary btn-sm" onclick="event.stopPropagation();viewPatient('${p.patient_id}')">Review →</button>
+                        <button class="btn btn-primary btn-sm" onclick="event.stopPropagation();viewPatient('${p.patient_id}')">Review Case →</button>
                     </td>
                 </tr>
-            `).join('');
+            `}).join('');
         }
 
         function setFilter(filter, btn) {

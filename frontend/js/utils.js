@@ -55,7 +55,14 @@ function requireAuth(role = null) {
         return false;
     }
     if (role && api.getRole() !== role) {
-        window.location.href = api.getRole() === 'doctor' ? '/doctor-dashboard.html' : '/patient-dashboard.html';
+        const userRole = api.getRole();
+        if (userRole === 'doctor') {
+            window.location.href = '/doctor-dashboard.html';
+        } else if (userRole === 'assistant' || userRole === 'nurse') {
+            window.location.href = '/assistant-dashboard.html';
+        } else {
+            window.location.href = '/patient-dashboard.html';
+        }
         return false;
     }
     return true;

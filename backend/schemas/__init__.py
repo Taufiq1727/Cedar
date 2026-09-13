@@ -7,16 +7,17 @@ class RegisterRequest(BaseModel):
     email: EmailStr
     password: str
     name: str
-    role: str  # "patient" or "doctor"
+    role: str  # "assistant", "nurse", "doctor", "patient"
     phone: Optional[str] = None
     # Patient-specific
     age: Optional[int] = None
     gender: Optional[str] = None
     blood_group: Optional[str] = None
-    # Doctor-specific
+    # Doctor/Assistant-specific
     hospital: Optional[str] = None
     professional_id: Optional[str] = None
     specialization: Optional[str] = None
+    department: Optional[str] = None
 
 
 class LoginRequest(BaseModel):
