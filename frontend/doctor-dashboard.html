@@ -7,6 +7,50 @@
     <link rel="stylesheet" href="css/base.css">
     <link rel="stylesheet" href="css/dashboard.css">
     <link rel="stylesheet" href="css/doctor.css">
+    <style>
+        .scope-selector {
+            display: flex;
+            gap: 8px;
+            margin-bottom: var(--space-4);
+            background: white;
+            padding: 6px;
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--gray-200);
+            width: fit-content;
+        }
+        .scope-btn {
+            padding: 8px 16px;
+            border-radius: var(--radius-md);
+            border: none;
+            background: transparent;
+            font-size: 0.88rem;
+            font-weight: 600;
+            color: var(--gray-600);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .scope-btn:hover {
+            color: var(--primary-600);
+            background: var(--primary-50);
+        }
+        .scope-btn.active {
+            background: var(--primary-600);
+            color: white;
+            box-shadow: var(--shadow-sm);
+        }
+        .doc-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 0.75rem;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-weight: 600;
+        }
+        .doc-badge-mine { background: #e0f2fe; color: #0284c7; }
+        .doc-badge-other { background: #f3f4f6; color: #4b5563; }
+        .doc-badge-unassigned { background: #fef3c7; color: #b45309; border: 1px dashed #f59e0b; }
+    </style>
 </head>
 <body>
     <div class="dashboard-layout">
@@ -15,16 +59,16 @@
             <div class="dash-header-left">
                 <a href="/" class="dash-brand"><div class="icon">🏥</div> ClinAssistAI</a>
                 <nav class="dash-nav">
-                    <a href="doctor-dashboard.html" class="active">Patient Queue</a>
+                    <a href="doctor-dashboard.html" class="active">👨‍⚕️ Clinical Queue</a>
                 </nav>
             </div>
             <div class="dash-header-right">
                 <div class="dash-user">
                     <div>
                         <div class="dash-user-name" id="user-name">Doctor</div>
-                        <div class="dash-user-role">Physician</div>
+                        <div class="dash-user-role" id="user-role-spec">Specialist Physician</div>
                     </div>
-                    <div class="dash-user-avatar" id="user-avatar">D</div>
+                    <div class="dash-user-avatar" id="user-avatar">👨‍⚕️</div>
                 </div>
                 <button class="btn btn-ghost btn-sm" onclick="logout()">Logout</button>
             </div>
@@ -32,39 +76,55 @@
 
         <!-- Content -->
         <main class="dash-content-wide">
-            <div class="page-header">
-                <h1>Patient Queue</h1>
-                <p>Review and manage incoming patient clinical intakes</p>
+            <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:12px">
+                <div>
+                    <h1>Patient Clinical Queue</h1>
+                    <p>Review pre-consultation intake, AI summaries, vital signs, and red flags</p>
+                </div>
+                <div style="display:flex;gap:10px;align-items:center">
+                    <button class="btn btn-secondary btn-sm" onclick="loadQueue()" id="refresh-btn">
+                        🔄 Refresh Queue
+                    </button>
+                </div>
             </div>
 
             <!-- Quick Stats -->
             <div class="quick-stats">
                 <div class="quick-stat">
-                    <div class="label">Total Patients</div>
+                    <div class="label">Total Patients in Queue</div>
                     <div class="value" id="stat-total">—</div>
                 </div>
                 <div class="quick-stat">
-                    <div class="label">🔴 High Priority</div>
+                    <div class="label">🔴 High Priority / Red Flags</div>
                     <div class="value" id="stat-high" style="color:var(--danger)">—</div>
                 </div>
                 <div class="quick-stat">
-                    <div class="label">🟡 Pending Review</div>
+                    <div class="label">🟡 Pending Verification</div>
                     <div class="value" id="stat-pending" style="color:var(--warning)">—</div>
                 </div>
                 <div class="quick-stat">
-                    <div class="label">✅ Approved</div>
+                    <div class="label">✅ Verified & Approved</div>
                     <div class="value" id="stat-approved" style="color:var(--success)">—</div>
+                </div>
+            </div>
+
+            <!-- Queue Scope Controls -->
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+                <div class="scope-selector">
+                    <button class="scope-btn active" data-scope="all" onclick="setScope('all', this)">🌐 All Hospital OPD Queue</button>
+                    <button class="scope-btn" data-scope="mine" onclick="setScope('mine', this)">👨‍⚕️ Assigned to Me</button>
+                    <button class="scope-btn" data-scope="unassigned" onclick="setScope('unassigned', this)">📋 Unassigned Cases</button>
                 </div>
             </div>
 
             <!-- Filter Bar -->
             <div class="filter-bar">
-                <input type="text" class="search-input" placeholder=" Search by patient name or complaint..." id="search-input" oninput="filterQueue()">
+                <input type="text" class="search-input" placeholder="🔍 Search patient name, complaint, or vitals..." id="search-input" oninput="filterQueue()">
                 <button class="filter-btn active" data-filter="all" onclick="setFilter('all', this)">All</button>
-                <button class="filter-btn" data-filter="HIGH" onclick="setFilter('HIGH', this)"> High Priority</button>
-                <button class="filter-btn" data-filter="pending" onclick="setFilter('pending', this)">Pending Review</button>
-                <button class="filter-btn" data-filter="approved" onclick="setFilter('approved', this)">Approved</button>
-                <button class="filter-btn" data-filter="in_progress" onclick="setFilter('in_progress', this)">In Progress</button>
+                <button class="filter-btn" data-filter="HIGH" onclick="setFilter('HIGH', this)">🔴 High Priority</button>
+                <button class="filter-btn" data-filter="pending" onclick="setFilter('pending', this)">🟡 Pending Review</button>
+                <button class="filter-btn" data-filter="approved" onclick="setFilter('approved', this)">✅ Verified</button>
+                <button class="filter-btn" data-filter="in_progress" onclick="setFilter('in_progress', this)">⏳ In Progress</button>
             </div>
 
             <!-- Queue Table -->
@@ -74,20 +134,20 @@
                         <thead>
                             <tr>
                                 <th>Patient</th>
-                                <th>Chief Complaint</th>
+                                <th>Chief Complaint & Vitals</th>
+                                <th>Assigned Doctor</th>
                                 <th>Priority</th>
                                 <th>Status</th>
                                 <th>Time</th>
-                                <th>Actions</th>
+                                <th style="text-align:right">Actions</th>
                             </tr>
                         </thead>
                         <tbody id="queue-body">
                             <tr>
-                                <td colspan="6">
+                                <td colspan="7">
                                     <div class="empty-state">
                                         <div class="empty-state-icon">📋</div>
-                                        <div class="empty-state-title">No patients in queue</div>
-                                        <div class="empty-state-text">Patients will appear here once they complete their clinical intake.</div>
+                                        <div class="empty-state-title">Loading patient queue...</div>
                                     </div>
                                 </td>
                             </tr>
@@ -104,30 +164,55 @@
     <script>
         if (!requireAuth('doctor')) { /* redirected */ }
 
-        document.getElementById('user-name').textContent = api.getName();
+        let currentDoctorProfile = null;
+        let currentScope = 'all';
+        let currentFilter = 'all';
+        let allPatients = [];
+
+        document.getElementById('user-name').textContent = api.getName() || 'Doctor';
         document.getElementById('user-avatar').textContent = (api.getName() || 'D')[0].toUpperCase();
+
+        async function initDoctorProfile() {
+            try {
+                currentDoctorProfile = await api.request('/doctor/profile');
+                if (currentDoctorProfile) {
+                    document.getElementById('user-name').textContent = currentDoctorProfile.name;
+                    document.getElementById('user-role-spec').textContent = `${currentDoctorProfile.specialization} • ${currentDoctorProfile.hospital || 'OPD'}`;
+                }
+            } catch (e) {
+                console.warn('Profile fetch:', e);
+            }
+        }
 
         function logout() {
             api.clearAuth();
             window.location.href = '/login.html';
         }
 
-        let allPatients = [];
-        let currentFilter = 'all';
-
         async function loadQueue() {
-            try {
-                allPatients = await api.getDoctorPatients();
+            const refreshBtn = document.getElementById('refresh-btn');
+            if (refreshBtn) {
+                refreshBtn.textContent = '⏳ Loading...';
+                refreshBtn.disabled = true;
+            }
 
-                // Stats
+            try {
+                allPatients = await api.getDoctorPatients(currentScope);
+
+                // Update Stats
                 document.getElementById('stat-total').textContent = allPatients.length;
-                document.getElementById('stat-high').textContent = allPatients.filter(p => p.priority === 'HIGH').length;
+                document.getElementById('stat-high').textContent = allPatients.filter(p => p.priority === 'HIGH' || p.triage_level === 'EMERGENCY').length;
                 document.getElementById('stat-pending').textContent = allPatients.filter(p => p.status === 'completed' && p.summary_status !== 'approved').length;
                 document.getElementById('stat-approved').textContent = allPatients.filter(p => p.status === 'approved' || p.summary_status === 'approved').length;
 
                 filterQueue();
             } catch (err) {
-                toast.error('Failed to load patient queue: ' + err.message);
+                showToast('Failed to load patient queue: ' + err.message, 'error');
+            } finally {
+                if (refreshBtn) {
+                    refreshBtn.textContent = '🔄 Refresh Queue';
+                    refreshBtn.disabled = false;
+                }
             }
         }
 
@@ -135,20 +220,42 @@
             const tbody = document.getElementById('queue-body');
 
             if (patients.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state"><div class="empty-state-title">No patients match the filter</div></div></td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><div class="empty-state-icon">📋</div><div class="empty-state-title">No patients match the current filter</div><div class="empty-state-text">Select another filter or change the queue scope above.</div></div></td></tr>`;
                 return;
             }
 
             tbody.innerHTML = patients.map(p => {
-                const vitalsText = p.vitals && Object.keys(p.vitals).length > 0
-                    ? `<span style="font-size:0.75rem;padding:2px 6px;border-radius:4px;background:var(--gray-100);color:var(--gray-700);font-weight:600">BP: ${p.vitals.bp || '—'} | SpO2: ${p.vitals.spo2 ? p.vitals.spo2 + '%' : '—'}</span>`
-                    : '';
+                const vitals = p.vitals || {};
+                let vitalsHtml = '';
+                if (Object.keys(vitals).length > 0) {
+                    const parts = [];
+                    if (vitals.bp) parts.push(`BP: <strong>${escapeHtml(vitals.bp)}</strong>`);
+                    if (vitals.pulse) parts.push(`HR: ${escapeHtml(vitals.pulse)}`);
+                    if (vitals.spo2) {
+                        const isLow = parseFloat(vitals.spo2) < 92;
+                        parts.push(`SpO2: <span style="color:${isLow ? '#dc2626;font-weight:700' : 'inherit'}">${escapeHtml(vitals.spo2)}%</span>`);
+                    }
+                    if (vitals.temp) parts.push(`Temp: ${escapeHtml(vitals.temp)}°F`);
+                    vitalsHtml = `<div style="margin-top:5px;font-size:0.75rem;color:var(--gray-600);background:var(--gray-50);padding:3px 8px;border-radius:4px;border:1px solid var(--gray-200);display:inline-block">${parts.join(' | ')}</div>`;
+                }
+
                 const assistantBadge = p.assistant_name
-                    ? `<span style="font-size:0.72rem;color:var(--primary-700);background:var(--primary-50);padding:2px 6px;border-radius:4px;display:inline-block;margin-top:2px">👩‍⚕️ Triage: ${p.assistant_name}</span>`
+                    ? `<span style="font-size:0.72rem;color:var(--primary-700);background:var(--primary-50);padding:2px 6px;border-radius:4px;display:inline-block;margin-top:2px">👩‍⚕️ Triage: ${escapeHtml(p.assistant_name)}</span>`
                     : '';
 
+                // Doctor Assignment Pill
+                let docPill = '';
+                if (p.assigned_doctor) {
+                    const isMine = (currentDoctorProfile && currentDoctorProfile.name === p.assigned_doctor) || (api.getName() === p.assigned_doctor);
+                    docPill = `<span class="doc-badge ${isMine ? 'doc-badge-mine' : 'doc-badge-other'}">${isMine ? '⭐ ' : '👨‍⚕️ '}${escapeHtml(p.assigned_doctor)}</span>`;
+                } else {
+                    docPill = `<span class="doc-badge doc-badge-unassigned">⚡ Unassigned</span>`;
+                }
+
+                const canClaim = !p.assigned_doctor || (currentDoctorProfile && currentDoctorProfile.name !== p.assigned_doctor);
+
                 return `
-                <tr onclick="viewPatient('${p.patient_id}')">
+                <tr onclick="viewPatient('${p.patient_id}', '${p.session_id}')" style="cursor:pointer">
                     <td>
                         <div class="patient-cell">
                             <div class="patient-avatar">${(p.patient_name || '?')[0].toUpperCase()}</div>
@@ -159,18 +266,29 @@
                             </div>
                         </div>
                     </td>
-                    <td>
-                        <div style="font-weight:500;color:var(--gray-900)">${escapeHtml(p.chief_complaint || '—')}</div>
-                        <div style="margin-top:4px">${vitalsText}</div>
+                    <td style="max-width:300px">
+                        <div style="font-weight:600;color:var(--gray-900);font-size:0.9rem">${escapeHtml(p.chief_complaint || 'General Consultation')}</div>
+                        ${vitalsHtml}
                     </td>
+                    <td>${docPill}</td>
                     <td>${priorityBadge(p.priority)}</td>
                     <td>${statusBadge(p.status)}</td>
                     <td><span class="text-sm text-muted">${formatTimeAgo(p.created_at)}</span></td>
-                    <td>
-                        <button class="btn btn-primary btn-sm" onclick="event.stopPropagation();viewPatient('${p.patient_id}')">Review Case →</button>
+                    <td style="text-align:right" onclick="event.stopPropagation()">
+                        <div style="display:flex;gap:6px;justify-content:flex-end">
+                            ${canClaim ? `<button class="btn btn-ghost btn-sm" style="color:var(--primary-700);border:1px solid var(--primary-200);background:var(--primary-50)" onclick="claimCase('${p.session_id}')" title="Assign this patient to your care">⚡ Claim</button>` : ''}
+                            <button class="btn btn-primary btn-sm" onclick="viewPatient('${p.patient_id}', '${p.session_id}')">Review Case →</button>
+                        </div>
                     </td>
                 </tr>
             `}).join('');
+        }
+
+        function setScope(scope, btn) {
+            currentScope = scope;
+            document.querySelectorAll('.scope-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            loadQueue();
         }
 
         function setFilter(filter, btn) {
@@ -184,32 +302,43 @@
             const search = document.getElementById('search-input').value.toLowerCase();
             let filtered = allPatients;
 
-            if (currentFilter === 'HIGH' || currentFilter === 'MEDIUM') {
-                filtered = filtered.filter(p => p.priority === currentFilter);
+            if (currentFilter === 'HIGH') {
+                filtered = filtered.filter(p => p.priority === 'HIGH' || p.triage_level === 'EMERGENCY');
             } else if (currentFilter === 'pending') {
                 filtered = filtered.filter(p => p.status === 'completed' && p.summary_status !== 'approved');
             } else if (currentFilter === 'approved') {
                 filtered = filtered.filter(p => p.status === 'approved' || p.summary_status === 'approved');
             } else if (currentFilter === 'in_progress') {
                 filtered = filtered.filter(p => p.status === 'in_progress');
-            } else if (currentFilter === 'completed') {
-                filtered = filtered.filter(p => p.status === 'completed');
             }
 
             if (search) {
                 filtered = filtered.filter(p =>
                     (p.patient_name || '').toLowerCase().includes(search) ||
-                    (p.chief_complaint || '').toLowerCase().includes(search)
+                    (p.chief_complaint || '').toLowerCase().includes(search) ||
+                    (p.assigned_doctor || '').toLowerCase().includes(search)
                 );
             }
 
             renderQueue(filtered);
         }
 
-        function viewPatient(patientId) {
-            window.location.href = `doctor-patient.html?id=${patientId}`;
+        async function claimCase(sessionId) {
+            try {
+                const res = await api.assignSessionDoctor(sessionId);
+                showToast(res.message || 'Case assigned to you!', 'success');
+                loadQueue();
+            } catch (err) {
+                showToast('Failed to claim case: ' + err.message, 'error');
+            }
         }
 
+        function viewPatient(patientId, sessionId = '') {
+            const query = sessionId ? `?id=${patientId}&session_id=${sessionId}` : `?id=${patientId}`;
+            window.location.href = `doctor-patient.html${query}`;
+        }
+
+        initDoctorProfile();
         loadQueue();
     </script>
 </body>

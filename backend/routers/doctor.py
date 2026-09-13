@@ -40,22 +40,42 @@ def get_doctor_profile(user: User = Depends(require_doctor), db: Session = Depen
     }
 
 
+from typing import Optional, List
+from pydantic import BaseModel
+
+class AssignDoctorRequest(BaseModel):
+    doctor_id: Optional[str] = None
+
+class PrescriptionRequest(BaseModel):
+    patient_id: str
+    session_id: Optional[str] = None
+    diagnosis: str
+    medications: list = []
+    advice: Optional[str] = None
+    investigations_ordered: Optional[str] = None
+    follow_up_days: Optional[int] = None
+
+class TimelineEventRequest(BaseModel):
+    title: str
+    event_type: str = "consultation"
+    description: Optional[str] = None
+    event_date: Optional[str] = None
+
+
 @router.get("/patients")
-def get_patient_queue(user: User = Depends(require_doctor), db: Session = Depends(get_db)):
-    """Get the patient queue - sessions assigned to this doctor."""
+def get_patient_queue(scope: str = "all", user: User = Depends(require_doctor), db: Session = Depends(get_db)):
+    """Get the patient queue - supports scope='all', 'mine', or 'unassigned'."""
     doctor = db.query(Doctor).filter(Doctor.user_id == user.id).first()
 
-    # Get sessions assigned to this doctor, or all if no assignment system yet
     query = db.query(IntakeSession).filter(
         IntakeSession.status.in_(["completed", "in_progress", "reviewed", "approved"])
     )
 
-    if doctor:
-        # Show sessions assigned to this doctor + unassigned sessions
-        query = query.filter(
-            (IntakeSession.assigned_doctor_id == doctor.id) |
-            (IntakeSession.assigned_doctor_id.is_(None))
-        )
+    if scope == "mine" and doctor:
+        query = query.filter(IntakeSession.assigned_doctor_id == doctor.id)
+    elif scope == "unassigned":
+        query = query.filter(IntakeSession.assigned_doctor_id.is_(None))
+    # if scope == "all", shows all hospital sessions
 
     all_sessions = query.order_by(IntakeSession.created_at.desc()).all()
 
@@ -283,18 +303,17 @@ def approve_summary(
     if not summary:
         raise HTTPException(404, "Summary not found")
 
-    if req.status not in ("approved", "rejected"):
-        raise HTTPException(400, "Status must be 'approved' or 'rejected'")
+    if req.status not in ("approved", "rejected", "reviewed"):
+        raise HTTPException(400, "Status must be 'approved', 'reviewed', or 'rejected'")
 
     summary.status = req.status
     summary.doctor_id = doctor.id if doctor else None
     summary.doctor_notes = req.doctor_notes
 
-    if req.status == "approved":
-        summary.approved_at = datetime.now(timezone.utc)
-        # Update session status
-        session = db.query(IntakeSession).filter(IntakeSession.id == summary.session_id).first()
-        if session:
+    session = db.query(IntakeSession).filter(IntakeSession.id == summary.session_id).first()
+    if session:
+        if req.status == "approved":
+            summary.approved_at = datetime.now(timezone.utc)
             session.status = "approved"
             # Sync any remaining draft sessions for this patient
             stale_sessions = db.query(IntakeSession).filter(
@@ -304,6 +323,8 @@ def approve_summary(
             ).all()
             for os in stale_sessions:
                 os.status = "approved"
+        elif req.status in ("reviewed", "rejected"):
+            session.status = "reviewed"
 
     if req.edits and summary.summary_json:
         # Merge doctor edits into summary
@@ -364,3 +385,157 @@ def get_assigned_doctor(
 
     doctor_info = get_doctor_profile_for_patient(db, session.assigned_doctor_id)
     return {"assigned_doctor": doctor_info}
+
+
+@router.post("/session/{session_id}/assign")
+def assign_session_doctor(
+    session_id: str,
+    req: Optional[AssignDoctorRequest] = None,
+    user: User = Depends(require_doctor),
+    db: Session = Depends(get_db),
+):
+    """Assign or claim a session for a doctor."""
+    session = db.query(IntakeSession).filter(IntakeSession.id == session_id).first()
+    if not session:
+        raise HTTPException(404, "Session not found")
+
+    target_doctor_id = req.doctor_id if (req and req.doctor_id) else None
+    if not target_doctor_id:
+        doc = db.query(Doctor).filter(Doctor.user_id == user.id).first()
+        if doc:
+            target_doctor_id = doc.id
+
+    session.assigned_doctor_id = target_doctor_id
+    db.commit()
+
+    assigned_name = "Unassigned"
+    if target_doctor_id:
+        d_obj = db.query(Doctor).filter(Doctor.id == target_doctor_id).first()
+        if d_obj:
+            u_obj = db.query(User).filter(User.id == d_obj.user_id).first()
+            if u_obj:
+                assigned_name = u_obj.name
+
+    return {
+        "message": f"Case assigned to Dr. {assigned_name}",
+        "session_id": session_id,
+        "assigned_doctor_id": target_doctor_id,
+        "assigned_doctor_name": assigned_name,
+    }
+
+
+@router.post("/red-flag/{flag_id}/resolve")
+def resolve_red_flag(
+    flag_id: str,
+    user: User = Depends(require_doctor),
+    db: Session = Depends(get_db),
+):
+    """Toggle or resolve a red flag alert."""
+    flag = db.query(RedFlagAlert).filter(RedFlagAlert.id == flag_id).first()
+    if not flag:
+        raise HTTPException(404, "Red flag not found")
+
+    flag.resolved = not flag.resolved
+    doctor = db.query(Doctor).filter(Doctor.user_id == user.id).first()
+    flag.resolved_by = doctor.id if flag.resolved and doctor else None
+    flag.resolved_at = datetime.now(timezone.utc) if flag.resolved else None
+    db.commit()
+
+    return {
+        "message": "Red flag resolved" if flag.resolved else "Red flag reactivated",
+        "flag_id": flag_id,
+        "resolved": flag.resolved,
+    }
+
+
+@router.post("/prescription")
+def save_prescription(
+    req: PrescriptionRequest,
+    user: User = Depends(require_doctor),
+    db: Session = Depends(get_db),
+):
+    """Save doctor's clinical prescription, advice, and update medical records."""
+    doctor = db.query(Doctor).filter(Doctor.user_id == user.id).first()
+    doctor_name = user.name
+    doc_spec = doctor.specialization if doctor else "General Medicine"
+
+    # Find or update session
+    session = None
+    if req.session_id:
+        session = db.query(IntakeSession).filter(IntakeSession.id == req.session_id).first()
+    if not session:
+        session = db.query(IntakeSession).filter(IntakeSession.patient_id == req.patient_id).order_by(IntakeSession.created_at.desc()).first()
+
+    # Update summary if exists
+    if session:
+        from sqlalchemy.orm.attributes import flag_modified
+
+        session.status = "reviewed"
+        session.assigned_doctor_id = doctor.id if doctor else session.assigned_doctor_id
+        session_data = dict(session.structured_data or {})
+        session_data["latest_prescription"] = {
+            "doctor_name": doctor_name,
+            "specialization": doc_spec,
+            "diagnosis": req.diagnosis,
+            "medications": req.medications,
+            "advice": req.advice,
+            "investigations": req.investigations_ordered,
+            "follow_up_days": req.follow_up_days,
+            "prescribed_at": datetime.now(timezone.utc).isoformat(),
+        }
+        session.structured_data = session_data
+        flag_modified(session, "structured_data")
+
+        summary = db.query(ClinicalSummary).filter(ClinicalSummary.session_id == session.id).first()
+        if summary and summary.summary_json:
+            s_json = dict(summary.summary_json)
+            s_json["prescription"] = session_data["latest_prescription"]
+            summary.summary_json = s_json
+            flag_modified(summary, "summary_json")
+            if summary.status == "generated":
+                summary.status = "reviewed"
+
+    # Add to timeline
+    med_summary = ", ".join([f"{m.get('name', '')} ({m.get('dosage', '')})" for m in req.medications if isinstance(m, dict)])
+    timeline_event = MedicalTimelineEvent(
+        patient_id=req.patient_id,
+        event_type="consultation",
+        event_date=datetime.now(timezone.utc),
+        title=f"Prescription & Advice - Dr. {doctor_name} ({doc_spec})",
+        description=f"Diagnosis: {req.diagnosis}. Rx: {med_summary or 'See prescription'}. Advice: {req.advice or 'Routine follow-up'}.",
+        source_type="doctor_review",
+        source_id=session.id if session else None,
+    )
+    db.add(timeline_event)
+    db.commit()
+
+    return {
+        "message": "Prescription successfully saved and added to patient medical record!",
+        "doctor_name": doctor_name,
+        "diagnosis": req.diagnosis,
+        "medications": req.medications,
+        "session_status": session.status if session else None,
+    }
+
+
+@router.post("/patient/{patient_id}/timeline")
+def add_patient_timeline_event(
+    patient_id: str,
+    req: TimelineEventRequest,
+    user: User = Depends(require_doctor),
+    db: Session = Depends(get_db),
+):
+    """Add a clinical timeline event for a patient."""
+    evt_date = datetime.fromisoformat(req.event_date) if req.event_date else datetime.now(timezone.utc)
+    evt = MedicalTimelineEvent(
+        patient_id=patient_id,
+        event_type=req.event_type,
+        event_date=evt_date,
+        title=req.title,
+        description=req.description,
+        source_type="manual",
+    )
+    db.add(evt)
+    db.commit()
+    return {"message": "Timeline event created successfully", "id": evt.id}
+

@@ -600,7 +600,7 @@
                 document.getElementById('stat-total').textContent = res.total_triaged_by_user || 0;
                 document.getElementById('stat-emergency').textContent = res.emergency_count || 0;
                 document.getElementById('stat-urgent').textContent = res.urgent_count || 0;
-                document.getElementById('stat-dispatched').textContent = res.pending_doctor_review || 0;
+                document.getElementById('stat-dispatched').textContent = res.dispatched_count || res.pending_doctor_review || 0;
             } catch (err) {
                 console.error('Failed to load stats:', err);
             }
@@ -972,6 +972,15 @@
                         ? `BP: ${item.vitals.bp || '—'} | SpO2: ${item.vitals.spo2 ? item.vitals.spo2 + '%' : '—'}`
                         : '—';
 
+                    let statusHtml = '<span style="padding:3px 8px;border-radius:12px;font-size:0.75rem;font-weight:600;background:#dbeafe;color:#1e40af">Dispatched</span>';
+                    if (item.status === 'reviewed') {
+                        statusHtml = '<span style="padding:3px 8px;border-radius:12px;font-size:0.75rem;font-weight:600;background:#fef3c7;color:#92400e">Doctor Reviewed</span>';
+                    } else if (item.status === 'approved') {
+                        statusHtml = '<span style="padding:3px 8px;border-radius:12px;font-size:0.75rem;font-weight:600;background:#dcfce7;color:#166534">Verified</span>';
+                    } else if (!item.assigned_doctor_name || item.assigned_doctor_name === 'Unassigned') {
+                        statusHtml = '<span style="padding:3px 8px;border-radius:12px;font-size:0.75rem;font-weight:600;background:#f3f4f6;color:#4b5563">Saved</span>';
+                    }
+
                     return `
                         <tr>
                             <td style="font-weight:600;color:var(--gray-600)">${time}</td>
@@ -990,9 +999,7 @@
                                 <div style="font-size:0.75rem;color:var(--gray-500)">${item.assigned_doctor_spec}</div>
                             </td>
                             <td>
-                                <span style="padding:3px 8px;border-radius:12px;font-size:0.75rem;font-weight:600;background:#dcfce7;color:#166534">
-                                    Dispatched
-                                </span>
+                                ${statusHtml}
                             </td>
                         </tr>
                     `;

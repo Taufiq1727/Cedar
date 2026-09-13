@@ -3,10 +3,63 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Patient Review — ClinAssistAI</title>
+    <title>Patient Clinical Review — ClinAssistAI</title>
     <link rel="stylesheet" href="css/base.css">
     <link rel="stylesheet" href="css/dashboard.css">
     <link rel="stylesheet" href="css/doctor.css">
+    <style>
+        .rx-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        .rx-table th, .rx-table td {
+            padding: 8px 10px;
+            border: 1px solid var(--gray-200);
+            text-align: left;
+            font-size: 0.88rem;
+        }
+        .rx-table th {
+            background: var(--gray-50);
+            color: var(--gray-700);
+            font-weight: 600;
+        }
+        .rx-input {
+            width: 100%;
+            border: 1px solid var(--gray-300);
+            border-radius: var(--radius-sm);
+            padding: 6px 8px;
+            font-size: 0.85rem;
+        }
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 100;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .modal-card {
+            background: white;
+            border-radius: var(--radius-lg);
+            padding: 24px;
+            max-width: 650px;
+            width: 100%;
+            max-height: 85vh;
+            overflow-y: auto;
+            box-shadow: var(--shadow-xl);
+        }
+        @media print {
+            .dash-header, .dash-nav, .tabs, .summary-actions, .btn, .doc-upload-section, #detail-tabs {
+                display: none !important;
+            }
+            .dash-content-wide { padding: 0 !important; }
+            .tab-content { display: block !important; }
+            body { background: white !important; color: black !important; }
+        }
+    </style>
 </head>
 <body>
     <div class="dashboard-layout">
@@ -15,7 +68,7 @@
             <div class="dash-header-left">
                 <a href="/" class="dash-brand"><div class="icon">🏥</div> ClinAssistAI</a>
                 <nav class="dash-nav">
-                    <a href="doctor-dashboard.html">Patient Queue</a>
+                    <a href="doctor-dashboard.html">← Patient Queue</a>
                     <a href="#" class="active">Patient Review</a>
                 </nav>
             </div>
@@ -23,28 +76,35 @@
                 <div class="dash-user">
                     <div>
                         <div class="dash-user-name" id="user-name">Doctor</div>
-                        <div class="dash-user-role">Physician</div>
+                        <div class="dash-user-role" id="user-spec-role">Attending Physician</div>
                     </div>
-                    <div class="dash-user-avatar" id="user-avatar">D</div>
+                    <div class="dash-user-avatar" id="user-avatar">👨‍⚕️</div>
                 </div>
-                <button class="btn btn-ghost btn-sm" onclick="api.clearAuth();window.location.href='/login.html'">Logout</button>
+                <button class="btn btn-ghost btn-sm" onclick="logout()">Logout</button>
             </div>
         </header>
 
         <!-- Content -->
         <main class="dash-content-wide">
-            <!-- Patient Header -->
+            <!-- Patient Header Bar -->
             <div class="patient-detail-header" id="patient-header">
                 <div class="patient-info-card">
                     <div class="patient-big-avatar" id="patient-avatar">?</div>
                     <div class="patient-main-info">
-                        <h2 id="patient-name">Loading...</h2>
-                        <p id="patient-meta"></p>
+                        <div style="display:flex;align-items:center;gap:10px">
+                            <h2 id="patient-name" style="margin:0">Loading...</h2>
+                            <span id="header-triage-badge"></span>
+                        </div>
+                        <p id="patient-meta" style="margin-top:4px;color:var(--gray-600)"></p>
+                        <div style="margin-top:6px;display:flex;gap:8px;align-items:center" id="header-doctor-pill"></div>
                     </div>
                 </div>
-                <div style="display:flex;gap:var(--space-3)">
-                    <a href="doctor-dashboard.html" class="btn btn-secondary btn-sm">← Back to Queue</a>
-                    <button class="btn btn-primary btn-sm" id="generate-summary-btn" onclick="generateSummary()">📋 Generate Summary</button>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+                    <a href="doctor-dashboard.html" class="btn btn-secondary btn-sm">← Queue</a>
+                    <button class="btn btn-ghost btn-sm" style="border:1px solid var(--gray-300)" onclick="openAssignModal()">👨‍⚕️ Reassign</button>
+                    <button class="btn btn-ghost btn-sm" style="border:1px solid var(--gray-300)" onclick="openFhirModal()">📦 FHIR JSON</button>
+                    <button class="btn btn-ghost btn-sm" style="border:1px solid var(--gray-300)" onclick="window.print()">🖨️ Print</button>
+                    <button class="btn btn-primary btn-sm" id="generate-summary-btn" onclick="generateSummary()">📋 Generate AI Summary</button>
                 </div>
             </div>
 
@@ -52,90 +112,279 @@
             <div class="tabs" id="detail-tabs">
                 <button class="tab active" data-tab="tab-overview">Overview</button>
                 <button class="tab" data-tab="tab-summary">AI Clinical Summary</button>
-                <button class="tab" data-tab="tab-history">Full History</button>
+                <button class="tab" data-tab="tab-prescription">💊 Prescription (Rx)</button>
+                <button class="tab" data-tab="tab-history">Intake History</button>
                 <button class="tab" data-tab="tab-documents">Documents</button>
                 <button class="tab" data-tab="tab-timeline">Timeline</button>
-                <button class="tab" data-tab="tab-alerts">Alerts</button>
+                <button class="tab" data-tab="tab-alerts">Red Flags</button>
             </div>
 
-            <!-- Tab: Overview -->
+            <!-- TAB 1: OVERVIEW -->
             <div class="tab-content active" id="tab-overview">
-                <div style="padding:var(--space-6) 0">
+                <div style="padding:var(--space-5) 0">
                     <div class="quick-stats" id="overview-stats"></div>
-                    <div class="dash-grid" id="overview-grid">
+                    <div class="dash-grid" id="overview-grid" style="grid-template-columns:1.2fr 0.8fr">
                         <div class="dash-card">
-                            <div class="dash-card-header"><h3>Chief Complaint</h3></div>
+                            <div class="dash-card-header">
+                                <h3>Chief Complaint & Triage Notes</h3>
+                            </div>
                             <div class="dash-card-body" id="overview-complaint">—</div>
                         </div>
                         <div class="dash-card">
-                            <div class="dash-card-header"><h3>⚠️ Active Red Flags</h3></div>
-                            <div class="dash-card-body" id="overview-flags">None</div>
+                            <div class="dash-card-header" style="display:flex;justify-content:space-between;align-items:center">
+                                <h3>⚠️ Clinical Red Flags</h3>
+                                <span id="overview-flag-count" class="badge badge-neutral">0 alerts</span>
+                            </div>
+                            <div class="dash-card-body" id="overview-flags">None detected</div>
+                        </div>
+                    </div>
+
+                    <!-- Quick Navigation Actions -->
+                    <div class="dash-card" style="margin-top:var(--space-4);background:linear-gradient(135deg, rgba(14, 165, 233, 0.04), rgba(99, 102, 241, 0.04))">
+                        <div class="dash-card-body" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+                            <div>
+                                <h4 style="margin:0 0 4px 0">Physician Action Desk</h4>
+                                <p style="margin:0;font-size:0.85rem;color:var(--gray-600)">Review AI extraction, verify clinical summary, and write electronic prescription.</p>
+                            </div>
+                            <div style="display:flex;gap:10px">
+                                <button class="btn btn-secondary btn-sm" onclick="switchTab('tab-summary')">📋 Review & Verify Summary</button>
+                                <button class="btn btn-primary btn-sm" onclick="switchTab('tab-prescription')">💊 Write Prescription</button>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Tab: AI Summary -->
+            <!-- TAB 2: AI CLINICAL SUMMARY -->
             <div class="tab-content" id="tab-summary">
-                <div style="padding:var(--space-6) 0">
+                <div style="padding:var(--space-5) 0">
                     <div class="summary-section" id="summary-section">
                         <div class="empty-state">
                             <div class="empty-state-icon">📋</div>
                             <div class="empty-state-title">No summary generated yet</div>
-                            <div class="empty-state-text">Click "Generate Summary" to create an AI clinical summary.</div>
+                            <div class="empty-state-text">Click "Generate AI Summary" above to synthesize an instant clinical summary from patient responses and vitals.</div>
+                            <button class="btn btn-primary btn-sm" style="margin-top:12px" onclick="generateSummary()">📋 Generate AI Summary Now</button>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Tab: Full History -->
+            <!-- TAB 3: DIGITAL PRESCRIPTION (Rx DESK) -->
+            <div class="tab-content" id="tab-prescription">
+                <div style="padding:var(--space-5) 0">
+                    <div class="dash-card">
+                        <div class="dash-card-header" style="display:flex;justify-content:space-between;align-items:center">
+                            <h3>💊 Electronic Prescription & Physician Orders</h3>
+                            <span class="badge badge-primary">OPD Rx Desk</span>
+                        </div>
+                        <div class="dash-card-body">
+                            <form id="rx-form" onsubmit="return handleSavePrescription(event)">
+                                <div class="form-group" style="margin-bottom:var(--space-4)">
+                                    <label class="form-label">Clinical Diagnosis / Impression *</label>
+                                    <input type="text" class="form-input" id="rx-diagnosis" required placeholder="e.g. Acute Anginal Episode / Essential Hypertension / Right Knee Ligament Sprain">
+                                    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
+                                        <span style="font-size:0.75rem;color:var(--gray-500);font-weight:600">Quick Suggestions:</span>
+                                        <button type="button" class="badge badge-neutral" style="cursor:pointer" onclick="setDiagnosis('Suspected Acute Coronary Syndrome')">+ CAD / Angina</button>
+                                        <button type="button" class="badge badge-neutral" style="cursor:pointer" onclick="setDiagnosis('Stage 2 Essential Hypertension')">+ Hypertension</button>
+                                        <button type="button" class="badge badge-neutral" style="cursor:pointer" onclick="setDiagnosis('Acute Viral Upper Respiratory Infection')">+ Viral URI</button>
+                                        <button type="button" class="badge badge-neutral" style="cursor:pointer" onclick="setDiagnosis('Gastroesophageal Reflux Disease (GERD)')">+ GERD</button>
+                                    </div>
+                                </div>
+
+                                <!-- Medications Builder -->
+                                <div style="margin-bottom:var(--space-4)">
+                                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                                        <label class="form-label" style="margin:0">Prescribed Medications (Rx):</label>
+                                        <button type="button" class="btn btn-secondary btn-sm" onclick="addMedicationRow()">+ Add Medication</button>
+                                    </div>
+                                    <div style="overflow-x:auto">
+                                        <table class="rx-table" id="rx-meds-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>Drug Name</th>
+                                                    <th>Dosage</th>
+                                                    <th>Frequency</th>
+                                                    <th>Duration</th>
+                                                    <th>Instructions</th>
+                                                    <th style="width:40px"></th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="rx-meds-body">
+                                                <tr>
+                                                    <td><input type="text" class="rx-input med-name" placeholder="e.g. Tab. Sorbitrate" required></td>
+                                                    <td><input type="text" class="rx-input med-dose" placeholder="5 mg" value="5 mg"></td>
+                                                    <td><input type="text" class="rx-input med-freq" placeholder="1-0-1" value="SOS"></td>
+                                                    <td><input type="text" class="rx-input med-dur" placeholder="5 days" value="5 days"></td>
+                                                    <td><input type="text" class="rx-input med-inst" placeholder="Sublingual if chest pain" value="Sublingual"></td>
+                                                    <td><button type="button" class="btn btn-ghost btn-sm" style="color:#ef4444" onclick="removeMedRow(this)">✕</button></td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+
+                                <div class="form-row" style="margin-bottom:var(--space-4)">
+                                    <div class="form-group">
+                                        <label class="form-label">Investigations / Tests Ordered</label>
+                                        <input type="text" class="form-input" id="rx-tests" placeholder="e.g. 12-Lead ECG, 2D-Echocardiogram, Trop-I, Serum Lipid Profile">
+                                    </div>
+                                    <div class="form-group" style="max-width:180px">
+                                        <label class="form-label">Follow-up</label>
+                                        <select class="form-select" id="rx-followup">
+                                            <option value="3">In 3 Days</option>
+                                            <option value="7" selected>In 7 Days (1 Week)</option>
+                                            <option value="14">In 2 Weeks</option>
+                                            <option value="30">In 1 Month</option>
+                                            <option value="0">SOS / If needed</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div class="form-group" style="margin-bottom:var(--space-4)">
+                                    <label class="form-label">Clinical Advice & Patient Instructions</label>
+                                    <textarea class="form-input" id="rx-advice" rows="3" placeholder="e.g. Low sodium diet, avoid strenuous exertion, monitor BP daily in morning and evening, report immediately to emergency if severe rest pain."></textarea>
+                                </div>
+
+                                <div style="display:flex;justify-content:flex-end;gap:10px">
+                                    <button type="submit" class="btn btn-primary" id="save-rx-btn">💾 Save & Issue Prescription</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 4: FULL INTAKE HISTORY -->
             <div class="tab-content" id="tab-history">
-                <div style="padding:var(--space-6) 0" id="history-content">
-                    <div class="empty-state">
-                        <div class="empty-state-title">Loading...</div>
-                    </div>
+                <div style="padding:var(--space-5) 0" id="history-content">
+                    <div class="empty-state"><div class="empty-state-title">Loading history...</div></div>
                 </div>
             </div>
 
-            <!-- Tab: Documents -->
+            <!-- TAB 5: DOCUMENTS -->
             <div class="tab-content" id="tab-documents">
-                <div style="padding:var(--space-6) 0" id="documents-content">
-                    <div class="empty-state">
-                        <div class="empty-state-icon">📄</div>
-                        <div class="empty-state-title">No documents uploaded</div>
+                <div style="padding:var(--space-5) 0">
+                    <!-- Upload Area -->
+                    <div class="dash-card" style="margin-bottom:var(--space-4)">
+                        <div class="dash-card-header">
+                            <h3>➕ Upload Medical Document for this Patient</h3>
+                        </div>
+                        <div class="dash-card-body">
+                            <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+                                <input type="file" id="doc-upload-file" accept=".jpg,.jpeg,.png,.pdf" class="form-input" style="flex:2">
+                                <select id="doc-upload-cat" class="form-select" style="flex:1">
+                                    <option value="prescription">💊 Prescription</option>
+                                    <option value="lab_report">🧪 Lab Report</option>
+                                    <option value="discharge_summary">🏥 Discharge Summary</option>
+                                </select>
+                                <button type="button" class="btn btn-primary" onclick="uploadPatientDoc()">Upload & OCR</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Documents List -->
+                    <div id="documents-content">
+                        <div class="empty-state">
+                            <div class="empty-state-icon">📄</div>
+                            <div class="empty-state-title">No documents uploaded</div>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Tab: Timeline -->
+            <!-- TAB 6: TIMELINE -->
             <div class="tab-content" id="tab-timeline">
-                <div style="padding:var(--space-6) 0" id="timeline-content">
-                    <div class="empty-state">
-                        <div class="empty-state-title">Loading timeline...</div>
+                <div style="padding:var(--space-5) 0">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--space-4)">
+                        <h3>Longitudinal Patient Record</h3>
+                        <button class="btn btn-secondary btn-sm" onclick="openTimelineModal()">➕ Add Clinical Event</button>
+                    </div>
+                    <div id="timeline-content">
+                        <div class="empty-state"><div class="empty-state-title">Loading timeline...</div></div>
                     </div>
                 </div>
             </div>
 
-            <!-- Tab: Alerts -->
+            <!-- TAB 7: ALERTS -->
             <div class="tab-content" id="tab-alerts">
-                <div style="padding:var(--space-6) 0" id="alerts-content">
+                <div style="padding:var(--space-5) 0" id="alerts-content">
                     <div class="empty-state">
                         <div class="empty-state-icon">🔔</div>
-                        <div class="empty-state-title">No alerts</div>
+                        <div class="empty-state-title">No active alerts</div>
                     </div>
                 </div>
             </div>
         </main>
     </div>
 
+    <!-- MODAL: REASSIGN DOCTOR -->
+    <div id="assign-modal" class="modal-overlay">
+        <div class="modal-card">
+            <h3 style="margin-bottom:8px">👨‍⚕️ Assign / Refer Specialist Doctor</h3>
+            <p style="font-size:0.85rem;color:var(--gray-600);margin-bottom:16px">Transfer this patient case to your care or another specialist department.</p>
+            <div class="form-group" style="margin-bottom:16px">
+                <label class="form-label">Select Specialist Doctor</label>
+                <select class="form-select" id="assign-doctor-select">
+                    <option value="">Loading doctors...</option>
+                </select>
+            </div>
+            <div style="display:flex;justify-content:flex-end;gap:10px">
+                <button class="btn btn-secondary" onclick="closeAssignModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="confirmDoctorAssignment()">Save Assignment</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: FHIR JSON BUNDLE -->
+    <div id="fhir-modal" class="modal-overlay">
+        <div class="modal-card" style="max-width:750px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+                <h3 style="margin:0">📦 FHIR R4 Clinical Bundle</h3>
+                <button class="btn btn-ghost btn-sm" onclick="closeFhirModal()">✕</button>
+            </div>
+            <p style="font-size:0.85rem;color:var(--gray-600);margin-bottom:12px">Interoperable HL7/FHIR JSON Bundle for this patient record.</p>
+            <pre id="fhir-json-view" style="background:var(--gray-900);color:#38bdf8;padding:14px;border-radius:var(--radius-md);max-height:400px;overflow:auto;font-size:0.78rem"></pre>
+            <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:14px">
+                <button class="btn btn-secondary" onclick="copyFhirJson()">📋 Copy JSON</button>
+                <button class="btn btn-primary" onclick="downloadFhirJson()">💾 Download File</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: ADD TIMELINE EVENT -->
+    <div id="timeline-modal" class="modal-overlay">
+        <div class="modal-card">
+            <h3 style="margin-bottom:8px">➕ Add Clinical Timeline Note</h3>
+            <div class="form-group" style="margin-bottom:12px">
+                <label class="form-label">Event Title *</label>
+                <input type="text" class="form-input" id="tl-title" placeholder="e.g. Bedside Echocardiography / Clinical Follow-up" required>
+            </div>
+            <div class="form-group" style="margin-bottom:12px">
+                <label class="form-label">Event Type</label>
+                <select class="form-select" id="tl-type">
+                    <option value="consultation">Consultation Note</option>
+                    <option value="diagnosis">Clinical Diagnosis</option>
+                    <option value="medication">Medication Order</option>
+                    <option value="procedure">Procedure / Test</option>
+                </select>
+            </div>
+            <div class="form-group" style="margin-bottom:16px">
+                <label class="form-label">Clinical Details</label>
+                <textarea class="form-input" id="tl-desc" rows="3" placeholder="Enter findings, impressions, or orders..."></textarea>
+            </div>
+            <div style="display:flex;justify-content:flex-end;gap:10px">
+                <button class="btn btn-secondary" onclick="closeTimelineModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="saveTimelineEvent()">Add to Record</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
     <script src="js/api.js"></script>
     <script src="js/toast.js"></script>
     <script src="js/utils.js"></script>
     <script>
         if (!requireAuth('doctor')) { /* redirected */ }
-
-        document.getElementById('user-name').textContent = api.getName();
-        document.getElementById('user-avatar').textContent = (api.getName() || 'D')[0].toUpperCase();
 
         const urlParams = new URLSearchParams(window.location.search);
         const patientId = urlParams.get('id');
@@ -143,9 +392,24 @@
         if (!patientId) { window.location.href = '/doctor-dashboard.html'; }
 
         let patientData = null;
+        let activeSession = null;
+        let fhirData = null;
 
-        // Init tabs
+        document.getElementById('user-name').textContent = api.getName() || 'Doctor';
+        document.getElementById('user-avatar').textContent = (api.getName() || 'D')[0].toUpperCase();
+
+        function logout() {
+            api.clearAuth();
+            window.location.href = '/login.html';
+        }
+
+        // Tab Switching Helper
         initTabs('#detail-tabs');
+
+        function switchTab(tabId) {
+            const tabBtn = document.querySelector(`[data-tab="${tabId}"]`);
+            if (tabBtn) tabBtn.click();
+        }
 
         async function loadPatient() {
             try {
@@ -157,32 +421,44 @@
                         patientData.sessions.unshift(targetSes);
                     }
                 }
+                activeSession = patientData.sessions && patientData.sessions.length > 0 ? patientData.sessions[0] : null;
                 renderPatient();
             } catch (err) {
-                toast.error('Failed to load patient: ' + err.message);
+                showToast('Failed to load patient: ' + err.message, 'error');
             }
         }
 
         function renderPatient() {
             const p = patientData.patient;
-            const sessions = patientData.sessions;
-            const docs = patientData.documents;
-            const timeline = patientData.timeline;
+            const sessions = patientData.sessions || [];
+            const docs = patientData.documents || [];
+            const timeline = patientData.timeline || [];
 
             // Header
             document.getElementById('patient-name').textContent = p.name;
             document.getElementById('patient-avatar').textContent = (p.name || '?')[0].toUpperCase();
+
             const metaParts = [];
-            if (p.age) metaParts.push(`${p.age} years`);
+            if (p.age) metaParts.push(`${p.age} Yrs`);
             if (p.gender) metaParts.push(p.gender);
             if (p.blood_group) metaParts.push(`Blood: ${p.blood_group}`);
             if (p.phone) metaParts.push(`📞 ${p.phone}`);
             document.getElementById('patient-meta').textContent = metaParts.join(' • ');
 
-            // Overview
-            const latestSession = sessions[0];
-            if (latestSession) {
-                const vitals = latestSession.vitals || {};
+            // Triage Badge
+            const triageLvl = activeSession ? (activeSession.triage_level || 'ROUTINE') : 'ROUTINE';
+            const badgeClass = triageLvl === 'EMERGENCY' ? 'badge-danger' : (triageLvl === 'URGENT' ? 'badge-warning' : 'badge-success');
+            document.getElementById('header-triage-badge').innerHTML = `<span class="badge ${badgeClass}" style="font-size:0.8rem;padding:4px 10px">${triageLvl}</span>`;
+
+            // Doctor Pill
+            const docName = activeSession ? activeSession.assigned_doctor : null;
+            document.getElementById('header-doctor-pill').innerHTML = docName
+                ? `<span style="font-size:0.8rem;color:var(--primary-700);background:var(--primary-50);padding:3px 10px;border-radius:12px;font-weight:600">👨‍⚕️ Attending: Dr. ${escapeHtml(docName)}</span>`
+                : `<span style="font-size:0.8rem;color:#b45309;background:#fef3c7;padding:3px 10px;border-radius:12px;font-weight:600">⚡ Unassigned Case</span>`;
+
+            // 1. Overview Tab
+            if (activeSession) {
+                const vitals = activeSession.vitals || {};
                 const vitalsDisplay = Object.keys(vitals).length > 0 ? `
                     <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(110px, 1fr));gap:8px;margin-top:12px;padding:12px;background:var(--gray-50);border-radius:var(--radius-md);border:1px solid var(--gray-200)">
                         <div style="text-align:center"><div style="font-size:0.7rem;color:var(--gray-500);font-weight:700">BLOOD PRESSURE</div><div style="font-weight:700;font-size:1.1rem;color:var(--gray-900)">${vitals.bp || '—'}</div><div style="font-size:0.65rem;color:var(--gray-400)">mmHg</div></div>
@@ -193,141 +469,308 @@
                     </div>
                 ` : '';
 
-                const triageBadge = latestSession.triage_level === 'EMERGENCY'
-                    ? '<span style="padding:4px 10px;border-radius:12px;background:#fee2e2;color:#b91c1c;font-weight:700;font-size:0.8rem">🔴 EMERGENCY</span>'
-                    : (latestSession.triage_level === 'URGENT'
-                        ? '<span style="padding:4px 10px;border-radius:12px;background:#fef3c7;color:#b45309;font-weight:700;font-size:0.8rem">🟡 URGENT</span>'
-                        : '<span style="padding:4px 10px;border-radius:12px;background:#dcfce7;color:#15803d;font-weight:700;font-size:0.8rem">🟢 ROUTINE</span>');
-
                 document.getElementById('overview-complaint').innerHTML = `
-                    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
-                        <div style="font-size:1.25rem;font-weight:700">${escapeHtml(latestSession.chief_complaint || 'Not recorded')}</div>
-                        <div>${triageBadge}</div>
-                    </div>
-                    <div style="font-size:0.82rem;color:var(--primary-700);background:var(--primary-50);padding:6px 10px;border-radius:var(--radius-sm);margin-bottom:10px">
-                        👩‍⚕️ <strong>Intake Triage Conducted By:</strong> ${latestSession.assistant_name || 'OPD Triage Nurse'}
-                        ${latestSession.nurse_notes ? `<div style="margin-top:4px;color:var(--gray-700)"><strong>Nurse Notes:</strong> "${escapeHtml(latestSession.nurse_notes)}"</div>` : ''}
+                    <div style="font-size:1.2rem;font-weight:700;color:var(--gray-900);margin-bottom:8px">${escapeHtml(activeSession.chief_complaint || 'General Outpatient Consultation')}</div>
+                    <div style="font-size:0.83rem;color:var(--primary-700);background:var(--primary-50);padding:8px 12px;border-radius:var(--radius-sm);margin-bottom:8px">
+                        👩‍⚕️ <strong>Intake Triage Conducted By:</strong> ${escapeHtml(activeSession.assistant_name || 'OPD Triage Nurse')}
+                        ${activeSession.nurse_notes ? `<div style="margin-top:4px;color:var(--gray-800)"><strong>Nurse Observations:</strong> "${escapeHtml(activeSession.nurse_notes)}"</div>` : ''}
                     </div>
                     ${vitalsDisplay}
                 `;
 
                 // Red flags overview
                 const allFlags = sessions.flatMap(s => s.red_flags || []);
+                document.getElementById('overview-flag-count').textContent = `${allFlags.length} active`;
                 if (allFlags.length > 0) {
                     document.getElementById('overview-flags').innerHTML = allFlags.map(f => `
-                        <div class="alert ${f.severity === 'HIGH' ? 'alert-danger' : 'alert-warning'}" style="margin-bottom:var(--space-2)">
+                        <div class="alert ${f.severity === 'HIGH' ? 'alert-danger' : 'alert-warning'}" style="margin-bottom:8px;padding:8px 12px">
                             <span class="alert-icon">${f.severity === 'HIGH' ? '🔴' : '🟡'}</span>
-                            <div><strong>${escapeHtml(f.title)}</strong><br>${escapeHtml(f.description)}</div>
+                            <div style="flex:1">
+                                <strong>${escapeHtml(f.title)}</strong>
+                                <div style="font-size:0.8rem">${escapeHtml(f.description)}</div>
+                            </div>
+                            <button class="btn btn-ghost btn-sm" style="font-size:0.75rem" onclick="toggleRedFlag('${f.id}')">${f.resolved ? 'Reactivate' : '✓ Resolve'}</button>
                         </div>
                     `).join('');
+                } else {
+                    document.getElementById('overview-flags').innerHTML = '<div style="color:var(--gray-500);font-size:0.88rem">No red flags flagged for this patient.</div>';
                 }
 
-                // Overview stats
+                // Stats
                 document.getElementById('overview-stats').innerHTML = `
-                    <div class="quick-stat"><div class="label">Triage Priority</div><div class="value text-sm">${latestSession.triage_level || 'ROUTINE'}</div></div>
-                    <div class="quick-stat"><div class="label">Red Flags</div><div class="value" style="color:${allFlags.length > 0 ? 'var(--danger)' : 'var(--gray-800)'}">${allFlags.length}</div></div>
-                    <div class="quick-stat"><div class="label">Documents</div><div class="value">${docs.length}</div></div>
-                    <div class="quick-stat"><div class="label">Status</div><div class="value text-sm">${latestSession.status}</div></div>
+                    <div class="quick-stat"><div class="label">Priority Level</div><div class="value text-sm">${triageLvl}</div></div>
+                    <div class="quick-stat"><div class="label">Total Red Flags</div><div class="value" style="color:${allFlags.length > 0 ? 'var(--danger)' : 'var(--gray-800)'}">${allFlags.length}</div></div>
+                    <div class="quick-stat"><div class="label">Attached Docs</div><div class="value">${docs.length}</div></div>
+                    <div class="quick-stat"><div class="label">Intake Status</div><div class="value text-sm">${activeSession.status}</div></div>
                 `;
             }
 
-            // Summary tab
-            if (latestSession && latestSession.summary) {
-                renderSummary(latestSession.summary);
+            // 2. Summary Tab
+            if (activeSession && activeSession.summary) {
+                renderSummary(activeSession.summary);
             }
 
-            // History tab
+            // 3. History Tab
             renderHistory(sessions);
 
-            // Documents tab
+            // 4. Documents Tab
             renderDocuments(docs);
 
-            // Timeline tab
+            // 5. Timeline Tab
             renderTimeline(timeline);
 
-            // Alerts tab
+            // 6. Alerts Tab
             renderAlerts(sessions);
         }
 
+        // Summary Renderer
         function renderSummary(summary) {
             const section = document.getElementById('summary-section');
+            const summaryObj = summary.summary_json || {};
+
+            let sectionsHtml = '';
+            if (typeof summaryObj === 'object' && Object.keys(summaryObj).length > 0) {
+                sectionsHtml = `
+                    <div style="display:grid;grid-template-columns:1fr;gap:12px;margin:16px 0">
+                        ${summaryObj.history_of_present_illness ? `<div style="background:var(--gray-50);padding:12px;border-radius:var(--radius-md);border-left:3px solid var(--primary-500)"><strong style="color:var(--gray-900)">History of Present Illness (HPI):</strong><p style="margin:4px 0 0 0;font-size:0.9rem">${escapeHtml(summaryObj.history_of_present_illness)}</p></div>` : ''}
+                        ${summaryObj.past_medical_history ? `<div style="background:var(--gray-50);padding:12px;border-radius:var(--radius-md);border-left:3px solid #10b981"><strong style="color:var(--gray-900)">Past Medical & Surgical History:</strong><p style="margin:4px 0 0 0;font-size:0.9rem">${escapeHtml(summaryObj.past_medical_history)}</p></div>` : ''}
+                        ${summaryObj.current_medications ? `<div style="background:var(--gray-50);padding:12px;border-radius:var(--radius-md);border-left:3px solid #8b5cf6"><strong style="color:var(--gray-900)">Current Medications & Allergies:</strong><p style="margin:4px 0 0 0;font-size:0.9rem">Meds: ${Array.isArray(summaryObj.current_medications) ? summaryObj.current_medications.join(', ') : summaryObj.current_medications} | Allergies: ${Array.isArray(summaryObj.allergies) ? summaryObj.allergies.join(', ') : (summaryObj.allergies || 'None')}</p></div>` : ''}
+                        ${summaryObj.assessment ? `<div style="background:var(--gray-50);padding:12px;border-radius:var(--radius-md);border-left:3px solid #f59e0b"><strong style="color:var(--gray-900)">Clinical Assessment:</strong><p style="margin:4px 0 0 0;font-size:0.9rem">${escapeHtml(summaryObj.assessment)}</p></div>` : ''}
+                    </div>
+                `;
+            }
+
             section.innerHTML = `
-                <h3>📋 AI Clinical Summary ${statusBadge(summary.status)}</h3>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+                    <h3>📋 AI Clinical Summary ${statusBadge(summary.status)}</h3>
+                    ${summary.approved_at ? `<span class="badge badge-success">✓ Verified on ${formatDateTime(summary.approved_at)}</span>` : ''}
+                </div>
                 <div class="alert alert-warning" style="margin-bottom:var(--space-4)">
                     <span class="alert-icon">⚠️</span>
-                    AI-generated clinical intake summary. Requires clinician verification.
+                    AI-synthesized intake summary. Review and edit before finalizing verification.
                 </div>
-                <div class="summary-content">${escapeHtml(summary.summary_text || JSON.stringify(summary.summary_json, null, 2))}</div>
-                ${summary.doctor_notes ? `<div style="margin-top:var(--space-3)"><strong>Doctor Notes:</strong> ${escapeHtml(summary.doctor_notes)}</div>` : ''}
-                <div class="doctor-notes-area">
-                    <label class="form-label">Doctor Notes / Edits</label>
-                    <textarea id="doctor-notes" placeholder="Add your notes, corrections, or observations...">${summary.doctor_notes || ''}</textarea>
+                ${sectionsHtml}
+                <div class="summary-content" style="white-space:pre-wrap;font-size:0.88rem;background:#f8fafc;padding:16px;border-radius:var(--radius-md);border:1px solid var(--gray-200)">${escapeHtml(summary.summary_text || JSON.stringify(summaryObj, null, 2))}</div>
+
+                <div class="doctor-notes-area" style="margin-top:16px">
+                    <label class="form-label" style="font-weight:700">Physician Clinical Notes / Modifications</label>
+                    <textarea id="doctor-notes" rows="3" class="form-input" placeholder="Add observations, diagnostic rationale, or corrections...">${summary.doctor_notes || ''}</textarea>
                 </div>
-                <div class="summary-actions">
-                    <button class="btn btn-accent" onclick="approveSummary('${summary.id}', 'approved')">✓ Approve & Verify</button>
+
+                <div class="summary-actions" style="margin-top:16px;display:flex;gap:10px">
+                    <button class="btn btn-primary" onclick="approveSummary('${summary.id}', 'approved')">✓ Clinician Verify & Approve</button>
+                    <button class="btn btn-secondary" onclick="saveSummaryEdits('${summary.id}')">💾 Save Notes</button>
                     <button class="btn btn-danger" onclick="approveSummary('${summary.id}', 'rejected')">✕ Reject</button>
                 </div>
-                ${summary.status === 'approved' ? `<div class="alert alert-success" style="margin-top:var(--space-4)"><span class="alert-icon">✅</span><strong>CLINICIAN VERIFIED</strong> — Approved on ${formatDateTime(summary.approved_at)}</div>` : ''}
             `;
         }
 
+        async function generateSummary() {
+            if (!activeSession) {
+                showToast('No active session to generate summary.', 'warning');
+                return;
+            }
+            showToast('Generating AI clinical summary...', 'info');
+
+            try {
+                const summary = await api.generateSummary(activeSession.id);
+                showToast('Clinical summary generated successfully!', 'success');
+                renderSummary(summary);
+                switchTab('tab-summary');
+                loadPatient();
+            } catch (err) {
+                showToast('Summary generation failed: ' + err.message, 'error');
+            }
+        }
+
+        async function approveSummary(summaryId, status) {
+            const notes = document.getElementById('doctor-notes')?.value || '';
+            try {
+                await api.approveSummary(summaryId, status, notes);
+                showToast(`Summary successfully ${status}!`, 'success');
+                loadPatient();
+            } catch (err) {
+                showToast('Failed to update summary: ' + err.message, 'error');
+            }
+        }
+
+        async function saveSummaryEdits(summaryId) {
+            const notes = document.getElementById('doctor-notes')?.value || '';
+            try {
+                await api.approveSummary(summaryId, 'reviewed', notes);
+                showToast('Doctor notes saved!', 'success');
+                loadPatient();
+            } catch (err) {
+                showToast('Failed: ' + err.message, 'error');
+            }
+        }
+
+        // Prescription Desk
+        function setDiagnosis(diag) {
+            document.getElementById('rx-diagnosis').value = diag;
+        }
+
+        function addMedicationRow() {
+            const tbody = document.getElementById('rx-meds-body');
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td><input type="text" class="rx-input med-name" placeholder="Drug name" required></td>
+                <td><input type="text" class="rx-input med-dose" placeholder="Dosage (e.g. 500mg)"></td>
+                <td><input type="text" class="rx-input med-freq" placeholder="Freq (1-0-1)" value="1-0-1"></td>
+                <td><input type="text" class="rx-input med-dur" placeholder="Duration" value="5 days"></td>
+                <td><input type="text" class="rx-input med-inst" placeholder="After food" value="After food"></td>
+                <td><button type="button" class="btn btn-ghost btn-sm" style="color:#ef4444" onclick="removeMedRow(this)">✕</button></td>
+            `;
+            tbody.appendChild(tr);
+        }
+
+        function removeMedRow(btn) {
+            const row = btn.closest('tr');
+            if (document.querySelectorAll('#rx-meds-body tr').length > 1) {
+                row.remove();
+            } else {
+                showToast('At least one medication row is required', 'warning');
+            }
+        }
+
+        async function handleSavePrescription(e) {
+            e.preventDefault();
+            const btn = document.getElementById('save-rx-btn');
+            btn.textContent = '⏳ Saving...';
+            btn.disabled = true;
+
+            const meds = [];
+            document.querySelectorAll('#rx-meds-body tr').forEach(row => {
+                const name = row.querySelector('.med-name')?.value.trim();
+                if (name) {
+                    meds.push({
+                        name: name,
+                        dosage: row.querySelector('.med-dose')?.value.trim() || '',
+                        frequency: row.querySelector('.med-freq')?.value.trim() || '',
+                        duration: row.querySelector('.med-dur')?.value.trim() || '',
+                        instructions: row.querySelector('.med-inst')?.value.trim() || '',
+                    });
+                }
+            });
+
+            const payload = {
+                patient_id: patientId,
+                session_id: activeSession ? activeSession.id : null,
+                diagnosis: document.getElementById('rx-diagnosis').value.trim(),
+                medications: meds,
+                advice: document.getElementById('rx-advice').value.trim(),
+                investigations_ordered: document.getElementById('rx-tests').value.trim(),
+                follow_up_days: parseInt(document.getElementById('rx-followup').value) || 7,
+            };
+
+            try {
+                const res = await api.savePrescription(payload);
+                showToast(res.message || 'Prescription saved to patient record!', 'success');
+                loadPatient();
+            } catch (err) {
+                showToast('Failed to save prescription: ' + err.message, 'error');
+            } finally {
+                btn.textContent = '💾 Save & Issue Prescription';
+                btn.disabled = false;
+            }
+            return false;
+        }
+
+        // History Renderer
         function renderHistory(sessions) {
             const container = document.getElementById('history-content');
-            if (!sessions.length) {
-                container.innerHTML = '<div class="empty-state"><div class="empty-state-title">No history available</div></div>';
+            if (!sessions || !sessions.length) {
+                container.innerHTML = '<div class="empty-state"><div class="empty-state-title">No intake history available</div></div>';
                 return;
             }
 
-            let html = '';
-            sessions.forEach(s => {
-                html += `<h3 style="margin-bottom:var(--space-4)">Session: ${escapeHtml(s.chief_complaint || 'General')} <span class="text-muted text-sm">(${formatDate(s.created_at)})</span></h3>`;
-                if (s.answers && s.answers.length) {
-                    s.answers.forEach(a => {
-                        html += `
-                            <div class="answer-item">
-                                <div class="question">${escapeHtml(a.question_key.replace(/_/g, ' '))}</div>
-                                <div class="answer">${escapeHtml(a.answer_text)}</div>
-                                <div class="meta">${a.input_method === 'voice' ? '🎤 Voice' : '⌨️ Text'} • ${formatDateTime(a.created_at)}</div>
-                            </div>`;
-                    });
-                }
-                html += '<hr style="margin:var(--space-6) 0;border:none;border-top:1px solid var(--gray-100)">';
-            });
-            container.innerHTML = html;
+            container.innerHTML = sessions.map(s => `
+                <div class="dash-card" style="margin-bottom:var(--space-4)">
+                    <div class="dash-card-header" style="display:flex;justify-content:space-between">
+                        <div>
+                            <h4 style="margin:0">Session: ${escapeHtml(s.chief_complaint || 'General Intake')}</h4>
+                            <span class="text-xs text-muted">${formatDateTime(s.created_at)} • Pathway: ${s.pathway || 'General'}</span>
+                        </div>
+                        ${statusBadge(s.status)}
+                    </div>
+                    <div class="dash-card-body">
+                        ${(s.answers && s.answers.length > 0) ? s.answers.map(a => `
+                            <div class="answer-item" style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--gray-100)">
+                                <div class="question" style="font-weight:600;color:var(--primary-700)">${escapeHtml(a.question_key.replace(/_/g, ' ').toUpperCase())}</div>
+                                <div class="answer" style="margin-top:2px;color:var(--gray-900)">${escapeHtml(a.answer_text)}</div>
+                                <div class="meta" style="font-size:0.72rem;color:var(--gray-400)">${a.input_method === 'voice' ? '🎤 Voice Dictation' : '⌨️ Text Input'} • ${formatDateTime(a.created_at)}</div>
+                            </div>
+                        `).join('') : '<div style="color:var(--gray-500);font-size:0.85rem">Direct triage assessment recorded by assistant.</div>'}
+                    </div>
+                </div>
+            `).join('');
         }
 
+        // Documents Renderer & Upload
         function renderDocuments(docs) {
             const container = document.getElementById('documents-content');
-            if (!docs.length) return;
+            if (!docs || !docs.length) {
+                container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📄</div><div class="empty-state-title">No documents uploaded</div></div>';
+                return;
+            }
 
+            const iconMap = { prescription: '💊', lab_report: '🧪', discharge_summary: '🏥' };
             container.innerHTML = docs.map(d => {
-                const iconMap = { prescription: '💊', lab_report: '🧪', discharge_summary: '🏥' };
                 let extractedHtml = '';
                 if (d.extracted_data && typeof d.extracted_data === 'object') {
                     const ed = d.extracted_data;
                     const parts = [];
                     if (ed.diagnoses && ed.diagnoses.length) parts.push(`<strong>Diagnoses:</strong> ${ed.diagnoses.join(', ')}`);
                     if (ed.medications && ed.medications.length) parts.push(`<strong>Medications:</strong> ${ed.medications.map(m => typeof m === 'object' ? m.name : m).join(', ')}`);
-                    if (parts.length) extractedHtml = `<div style="margin-top:var(--space-2);font-size:0.8125rem;color:var(--gray-600)">${parts.join(' | ')}</div>`;
+                    if (parts.length) extractedHtml = `<div style="margin-top:4px;font-size:0.8rem;color:var(--gray-600)">${parts.join(' | ')}</div>`;
                 }
+
                 return `
-                    <div class="doc-list-item">
-                        <div style="display:flex;align-items:center;gap:var(--space-3)">
-                            <div class="doc-icon ${d.category}">${iconMap[d.category] || '📄'}</div>
+                    <div class="doc-list-item" style="display:flex;justify-content:space-between;align-items:center;padding:12px;background:white;border:1px solid var(--gray-200);border-radius:var(--radius-md);margin-bottom:8px">
+                        <div style="display:flex;align-items:center;gap:12px">
+                            <div class="doc-icon ${d.category}" style="font-size:1.4rem">${iconMap[d.category] || '📄'}</div>
                             <div>
                                 <strong>${escapeHtml(d.filename)}</strong>
-                                <div class="text-sm text-muted">${d.category.replace('_', ' ')} • ${formatDate(d.uploaded_at)}</div>
+                                <div class="text-sm text-muted">${d.category.replace(/_/g, ' ')} • ${formatDate(d.uploaded_at)}</div>
                                 ${extractedHtml}
                             </div>
                         </div>
-                        <span class="badge badge-neutral">${d.file_type.toUpperCase()}</span>
-                    </div>`;
+                        <div style="display:flex;gap:8px;align-items:center">
+                            <a href="${d.file_url || '#'}" target="_blank" class="btn btn-secondary btn-sm">👁️ View Document</a>
+                            <span class="badge badge-neutral">${d.file_type.toUpperCase()}</span>
+                        </div>
+                    </div>
+                `;
             }).join('');
         }
 
+        async function uploadPatientDoc() {
+            const fileInput = document.getElementById('doc-upload-file');
+            const file = fileInput.files[0];
+            if (!file) {
+                showToast('Please select a document file first', 'warning');
+                return;
+            }
+            const cat = document.getElementById('doc-upload-cat').value;
+            showToast(`Uploading and extracting ${file.name}...`, 'info');
+
+            try {
+                await api.uploadDocument(file, cat, activeSession ? activeSession.id : null, patientId);
+                showToast('Document processed with OCR & AI extraction!', 'success');
+                fileInput.value = '';
+                loadPatient();
+            } catch (err) {
+                showToast('Document upload failed: ' + err.message, 'error');
+            }
+        }
+
+        // Timeline Renderer
         function renderTimeline(timeline) {
             const container = document.getElementById('timeline-content');
-            if (!timeline.length) return;
+            if (!timeline || !timeline.length) {
+                container.innerHTML = '<div class="empty-state"><div class="empty-state-title">No timeline records yet</div></div>';
+                return;
+            }
 
             container.innerHTML = `<div class="timeline">${timeline.map(e => `
                 <div class="timeline-item">
@@ -336,58 +779,146 @@
                         <div class="timeline-date">${formatDate(e.event_date)}</div>
                         <h4>${escapeHtml(e.title)}</h4>
                         ${e.description ? `<p>${escapeHtml(e.description)}</p>` : ''}
-                        <span class="badge badge-neutral" style="margin-top:var(--space-2)">${e.event_type.replace('_', ' ')}</span>
+                        <span class="badge badge-neutral" style="margin-top:4px">${e.event_type.replace('_', ' ')}</span>
                     </div>
                 </div>
             `).join('')}</div>`;
         }
 
+        // Alerts Renderer & Toggle
         function renderAlerts(sessions) {
             const container = document.getElementById('alerts-content');
-            const allFlags = sessions.flatMap(s => (s.red_flags || []).map(f => ({...f, session_complaint: s.chief_complaint})));
+            const allFlags = (sessions || []).flatMap(s => (s.red_flags || []).map(f => ({...f, session_complaint: s.chief_complaint})));
 
-            if (!allFlags.length) return;
+            if (!allFlags.length) {
+                container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🔔</div><div class="empty-state-title">No active clinical red flags</div></div>';
+                return;
+            }
 
             container.innerHTML = allFlags.map(f => `
-                <div class="alert ${f.severity === 'HIGH' ? 'alert-danger' : 'alert-warning'}" style="margin-bottom:var(--space-3)">
+                <div class="alert ${f.severity === 'HIGH' ? 'alert-danger' : 'alert-warning'}" style="margin-bottom:12px">
                     <span class="alert-icon">${f.severity === 'HIGH' ? '🔴' : '🟡'}</span>
                     <div style="flex:1">
                         <strong>${escapeHtml(f.title)}</strong>
-                        <p style="margin-top:var(--space-1)">${escapeHtml(f.description)}</p>
-                        <div class="text-xs text-muted" style="margin-top:var(--space-2)">Session: ${escapeHtml(f.session_complaint || '—')} • ${formatDateTime(f.created_at)}</div>
+                        <p style="margin-top:2px">${escapeHtml(f.description)}</p>
+                        <div class="text-xs text-muted" style="margin-top:4px">Reported on ${formatDateTime(f.created_at)}</div>
                     </div>
-                    ${f.resolved ? '<span class="badge badge-success">Resolved</span>' : '<span class="badge badge-danger">Active</span>'}
+                    <div>
+                        <button class="btn ${f.resolved ? 'btn-secondary' : 'btn-primary'} btn-sm" onclick="toggleRedFlag('${f.id}')">
+                            ${f.resolved ? '✓ Resolved' : 'Mark Resolved'}
+                        </button>
+                    </div>
                 </div>
             `).join('');
         }
 
-        async function generateSummary() {
-            if (!patientData || !patientData.sessions.length) {
-                toast.warning('No sessions to generate summary from.');
-                return;
-            }
-            const sessionId = patientData.sessions[0].id;
-            toast.info('Generating AI clinical summary...');
-
+        async function toggleRedFlag(flagId) {
             try {
-                const summary = await api.generateSummary(sessionId);
-                toast.success('Summary generated successfully!');
-                renderSummary(summary);
-                // Switch to summary tab
-                document.querySelector('[data-tab="tab-summary"]').click();
+                const res = await api.resolveRedFlag(flagId);
+                showToast(res.message, 'success');
+                loadPatient();
             } catch (err) {
-                toast.error('Summary generation failed: ' + err.message);
+                showToast('Failed to update alert: ' + err.message, 'error');
             }
         }
 
-        async function approveSummary(summaryId, status) {
-            const notes = document.getElementById('doctor-notes')?.value || '';
+        // Modals: Assign Doctor
+        async function openAssignModal() {
+            const modal = document.getElementById('assign-modal');
+            const select = document.getElementById('assign-doctor-select');
+            modal.style.display = 'flex';
+
             try {
-                await api.approveSummary(summaryId, status, notes);
-                toast.success(`Summary ${status}!`);
-                loadPatient(); // Reload
+                const doctors = await api.getAvailableDoctors();
+                select.innerHTML = doctors.map(d => `
+                    <option value="${d.id}">Dr. ${d.name} (${d.specialization} • ${d.hospital})</option>
+                `).join('');
             } catch (err) {
-                toast.error('Failed: ' + err.message);
+                select.innerHTML = '<option value="">Failed to load doctors</option>';
+            }
+        }
+
+        function closeAssignModal() {
+            document.getElementById('assign-modal').style.display = 'none';
+        }
+
+        async function confirmDoctorAssignment() {
+            if (!activeSession) return;
+            const docId = document.getElementById('assign-doctor-select').value;
+            try {
+                const res = await api.assignSessionDoctor(activeSession.id, docId);
+                showToast(res.message || 'Case assigned successfully!', 'success');
+                closeAssignModal();
+                loadPatient();
+            } catch (err) {
+                showToast('Assignment failed: ' + err.message, 'error');
+            }
+        }
+
+        // Modals: FHIR JSON
+        async function openFhirModal() {
+            const modal = document.getElementById('fhir-modal');
+            const viewer = document.getElementById('fhir-json-view');
+            viewer.textContent = 'Loading FHIR Bundle...';
+            modal.style.display = 'flex';
+
+            try {
+                fhirData = await api.getFhirBundle(patientId);
+                viewer.textContent = JSON.stringify(fhirData, null, 2);
+            } catch (err) {
+                viewer.textContent = 'Failed to load FHIR bundle: ' + err.message;
+            }
+        }
+
+        function closeFhirModal() {
+            document.getElementById('fhir-modal').style.display = 'none';
+        }
+
+        function copyFhirJson() {
+            if (!fhirData) return;
+            navigator.clipboard.writeText(JSON.stringify(fhirData, null, 2));
+            showToast('FHIR JSON copied to clipboard!', 'success');
+        }
+
+        function downloadFhirJson() {
+            if (!fhirData) return;
+            const blob = new Blob([JSON.stringify(fhirData, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `FHIR_Patient_${patientId}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast('FHIR JSON file downloaded!', 'success');
+        }
+
+        // Modals: Timeline Event
+        function openTimelineModal() {
+            document.getElementById('timeline-modal').style.display = 'flex';
+        }
+
+        function closeTimelineModal() {
+            document.getElementById('timeline-modal').style.display = 'none';
+        }
+
+        async function saveTimelineEvent() {
+            const title = document.getElementById('tl-title').value.trim();
+            if (!title) {
+                showToast('Please enter an event title', 'warning');
+                return;
+            }
+
+            try {
+                await api.addTimelineEvent(patientId, {
+                    title: title,
+                    event_type: document.getElementById('tl-type').value,
+                    description: document.getElementById('tl-desc').value.trim(),
+                });
+                showToast('Timeline event added!', 'success');
+                closeTimelineModal();
+                loadPatient();
+            } catch (err) {
+                showToast('Failed to add timeline event: ' + err.message, 'error');
             }
         }
 

@@ -145,11 +145,12 @@ class ApiClient {
     }
 
     // Documents
-    async uploadDocument(file, category, sessionId = null) {
+    async uploadDocument(file, category, sessionId = null, patientId = null) {
         const formData = new FormData();
         formData.append('file', file);
         formData.append('category', category);
         if (sessionId) formData.append('session_id', sessionId);
+        if (patientId) formData.append('patient_id', patientId);
 
         return this.request('/documents/upload', {
             method: 'POST',
@@ -175,8 +176,9 @@ class ApiClient {
     }
 
     // Doctor
-    async getDoctorPatients() {
-        return this.request('/doctor/patients');
+    async getDoctorPatients(scope = 'all') {
+        const query = scope ? `?scope=${encodeURIComponent(scope)}` : '';
+        return this.request(`/doctor/patients${query}`);
     }
 
     async getDoctorPatientDetail(patientId) {
@@ -192,6 +194,33 @@ class ApiClient {
 
     async getSessionSummary(sessionId) {
         return this.request(`/doctor/summary/${sessionId}`);
+    }
+
+    async assignSessionDoctor(sessionId, doctorId = null) {
+        return this.request(`/doctor/session/${sessionId}/assign`, {
+            method: 'POST',
+            body: JSON.stringify({ doctor_id: doctorId }),
+        });
+    }
+
+    async resolveRedFlag(flagId) {
+        return this.request(`/doctor/red-flag/${flagId}/resolve`, {
+            method: 'POST',
+        });
+    }
+
+    async savePrescription(data) {
+        return this.request('/doctor/prescription', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
+    }
+
+    async addTimelineEvent(patientId, data) {
+        return this.request(`/doctor/patient/${patientId}/timeline`, {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
     }
 
     // Assistant / Nurse Triage

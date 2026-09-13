@@ -3,7 +3,9 @@ import logging
 from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from models.intake import IntakeSession, PatientAnswer
-from models.clinical import ClinicalHistory, RedFlagAlert
+from models.clinical import ClinicalHistory, RedFlagAlert, ClinicalSummary
+from models.doctor import Doctor
+from models.user import User
 from models.consent import ConsentRecord
 from clinical.pathways import detect_pathway, get_next_question, calculate_progress, get_pathway
 from clinical.red_flags import evaluate_red_flags
@@ -205,6 +207,24 @@ def get_session_details(db: Session, session_id: str) -> dict:
 
     answers = db.query(PatientAnswer).filter(PatientAnswer.session_id == session_id).order_by(PatientAnswer.created_at).all()
     red_flags = db.query(RedFlagAlert).filter(RedFlagAlert.session_id == session_id).all()
+    summary = db.query(ClinicalSummary).filter(ClinicalSummary.session_id == session_id).first()
+
+    assigned_doctor = None
+    if session.assigned_doctor_id:
+        doctor = db.query(Doctor).filter(Doctor.id == session.assigned_doctor_id).first()
+        doctor_user = db.query(User).filter(User.id == doctor.user_id).first() if doctor else None
+        if doctor and doctor_user:
+            assigned_doctor = {
+                "name": doctor_user.name,
+                "specialization": doctor.specialization,
+                "hospital": doctor.hospital,
+            }
+
+    prescription = None
+    if summary and isinstance(summary.summary_json, dict):
+        prescription = summary.summary_json.get("prescription")
+    if not prescription and isinstance(session.structured_data, dict):
+        prescription = session.structured_data.get("latest_prescription")
 
     return {
         "id": session.id,
@@ -214,7 +234,20 @@ def get_session_details(db: Session, session_id: str) -> dict:
         "chief_complaint": session.chief_complaint,
         "pathway": session.pathway,
         "progress_pct": session.progress_pct,
+        "triage_level": session.triage_level,
+        "vitals": session.vitals or {},
+        "nurse_notes": session.nurse_notes,
+        "assigned_doctor": assigned_doctor,
         "structured_data": session.structured_data,
+        "summary": {
+            "id": summary.id,
+            "summary_text": summary.summary_text,
+            "summary_json": summary.summary_json,
+            "status": summary.status,
+            "doctor_notes": summary.doctor_notes,
+            "approved_at": summary.approved_at.isoformat() if summary.approved_at else None,
+        } if summary else None,
+        "prescription": prescription,
         "created_at": session.created_at.isoformat() if session.created_at else None,
         "completed_at": session.completed_at.isoformat() if session.completed_at else None,
         "answers": [

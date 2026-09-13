@@ -47,7 +47,7 @@ class ClinicalSummaryResponse(BaseModel):
 
 
 class SummaryApproveRequest(BaseModel):
-    status: str  # "approved" or "rejected"
+    status: str  # "approved", "reviewed", or "rejected"
     doctor_notes: Optional[str] = None
     edits: Optional[Dict[str, Any]] = None
 

@@ -25,11 +25,24 @@ async def upload_document(
     file: UploadFile = File(...),
     category: str = Form(...),
     session_id: str = Form(None),
-    user: User = Depends(require_patient),
+    patient_id: str = Form(None),
+    user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Upload a medical document, run OCR, and extract clinical info."""
-    patient = db.query(Patient).filter(Patient.user_id == user.id).first()
+    patient = None
+    if user.role == "patient":
+        patient = db.query(Patient).filter(Patient.user_id == user.id).first()
+        if patient_id and patient and patient_id != patient.id:
+            raise HTTPException(403, "Access denied")
+    elif patient_id:
+        patient = db.query(Patient).filter(Patient.id == patient_id).first()
+    elif session_id:
+        from models.intake import IntakeSession
+        session = db.query(IntakeSession).filter(IntakeSession.id == session_id).first()
+        if session:
+            patient = db.query(Patient).filter(Patient.id == session.patient_id).first()
+
     if not patient:
         raise HTTPException(404, "Patient profile not found")
 

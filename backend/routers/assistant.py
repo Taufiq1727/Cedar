@@ -102,11 +102,21 @@ def get_triage_stats(
         IntakeSession.status.in_(["completed", "in_progress"])
     ).count()
 
+    dispatched_count = db.query(IntakeSession).filter(
+        IntakeSession.assigned_doctor_id.isnot(None)
+    ).count()
+
+    reviewed_count = db.query(IntakeSession).filter(
+        IntakeSession.status.in_(["reviewed", "approved"])
+    ).count()
+
     return {
         "total_triaged_by_user": total_triaged,
         "emergency_count": emergency_count,
         "urgent_count": urgent_count,
         "pending_doctor_review": pending_doctor_count,
+        "dispatched_count": dispatched_count,
+        "reviewed_count": reviewed_count,
         "assistant_name": current_user.name,
     }
 
