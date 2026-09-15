@@ -1,7 +1,13 @@
 """AI Service - Gemini API integration for clinical data extraction and summarization."""
 import json
 import logging
+import warnings
 from typing import Optional
+
+# Suppress the FutureWarning from the deprecated google-generativeai package.
+# It still functions correctly — we can migrate to google.genai once the package is available.
+warnings.filterwarnings("ignore", category=FutureWarning, module="google.*")
+
 import google.generativeai as genai
 from config import GEMINI_API_KEY
 

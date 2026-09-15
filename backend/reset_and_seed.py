@@ -394,7 +394,23 @@ def reset_and_seed_all():
             db.add(consent)
 
             # Answers
-            for q_key, q_text, ans_text, inp_method in pdata.get("answers", []):
+            for answer in pdata.get("answers", []):
+                # Support dict representation
+                if isinstance(answer, dict):
+                    q_key = answer.get("question_key") or answer.get("key")
+                    q_text = answer.get("question_text") or answer.get("text")
+                    ans_text = answer.get("answer_text") or answer.get("answer")
+                    inp_method = answer.get("input_method") or answer.get("method")
+                else:
+                    # Assume a sequence (tuple/list). Allow 3 or 4 items.
+                    if len(answer) == 4:
+                        q_key, q_text, ans_text, inp_method = answer
+                    elif len(answer) == 3:
+                        q_key, q_text, ans_text = answer
+                        inp_method = None
+                    else:
+                        raise ValueError(f"Unexpected answer format: {answer}")
+
                 ans = PatientAnswer(
                     session_id=session.id,
                     question_key=q_key,
@@ -434,7 +450,24 @@ def reset_and_seed_all():
                 db.add(summary)
 
             # Timeline
-            for event_type, title, days_ago in pdata.get("timeline", []):
+            for item in pdata.get("timeline", []):
+                # Support multiple possible formats for timeline entries
+                if isinstance(item, dict):
+                    # Expected keys: event_type, title, days_ago
+                    event_type = item.get("event_type")
+                    title = item.get("title")
+                    days_ago = item.get("days_ago", 0)
+                elif isinstance(item, (list, tuple)):
+                    # Allow tuple of length 3 or 4 (ignore extra values)
+                    if len(item) >= 3:
+                        event_type, title, days_ago = item[:3]
+                    else:
+                        # Skip malformed entry
+                        continue
+                else:
+                    # Skip unsupported entry types (e.g., a plain string)
+                    continue
+
                 event_date = now - timedelta(days=days_ago)
                 tl = MedicalTimelineEvent(
                     patient_id=patient.id,
@@ -442,7 +475,7 @@ def reset_and_seed_all():
                     event_type=event_type,
                     title=title,
                     source_type="intake" if days_ago == 0 else "historical_record",
-                    created_at=now
+                    created_at=now,
                 )
                 db.add(tl)
 

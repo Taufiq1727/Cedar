@@ -20,6 +20,7 @@ try:
 except ImportError:
     HAS_BCRYPT = False
 
+pwd_context = CryptContext(schemes=["bcrypt", "pbkdf2_sha256"], deprecated="auto")
 security = HTTPBearer()
 
 

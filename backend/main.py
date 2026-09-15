@@ -2,6 +2,12 @@
 import os
 import sys
 import logging
+import warnings
+from contextlib import asynccontextmanager
+
+# Suppress the FutureWarning from the deprecated google-generativeai package.
+# The library is still functional — this keeps the logs clean.
+warnings.filterwarnings("ignore", category=FutureWarning, module="google.*")
 
 # Ensure backend directory is in sys.path
 backend_dir = os.path.dirname(os.path.abspath(__file__))
@@ -32,6 +38,22 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Create database tables and seed initial doctor accounts on startup."""
+    logger.info("Initializing database...")
+    create_tables()
+    try:
+        from seed_doctors import seed_doctors
+        seed_doctors()
+        logger.info("Doctor accounts verified.")
+    except Exception as e:
+        logger.warning(f"Doctor seeding check: {e}")
+    logger.info("ClinAssistAI API started successfully.")
+    yield
+
+
 # Create FastAPI app
 app = FastAPI(
     title="ClinAssistAI API",
@@ -39,6 +61,7 @@ app = FastAPI(
     version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
+    lifespan=lifespan,
 )
 
 # CORS
@@ -61,20 +84,6 @@ app.include_router(intake_router)
 app.include_router(documents_router)
 app.include_router(ai_router)
 app.include_router(doctor_router)
-
-
-@app.on_event("startup")
-def startup():
-    """Create database tables and seed initial doctor accounts on startup."""
-    logger.info("Initializing database...")
-    create_tables()
-    try:
-        from seed_doctors import seed_doctors
-        seed_doctors()
-        logger.info("Doctor accounts verified.")
-    except Exception as e:
-        logger.warning(f"Doctor seeding check: {e}")
-    logger.info("ClinAssistAI API started successfully.")
 
 
 @app.get("/api/health", tags=["Health"])
@@ -111,3 +120,9 @@ def api_status():
 frontend_dir = os.path.abspath(os.path.join(backend_dir, "..", "frontend"))
 if os.path.exists(frontend_dir):
     app.mount("/", StaticFiles(directory=frontend_dir, html=True), name="frontend")
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+
